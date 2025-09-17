@@ -121,21 +121,22 @@ export class PlugScheduler {
     
     console.log(`📋 Today's schedule: ${todaySchedule.situation} day`);
     
-    // Skip if in manual override period (temporarily disabled for testing)
-    if (Date.now() < this.manualOverrideUntil) {
-      const remainingMinutes = Math.round((this.manualOverrideUntil - Date.now()) / 60000);
-      console.log(`🔧 Manual override active for ${remainingMinutes} more minutes - BUT CONTINUING FOR TESTING`);
-      // return; // DISABLED for testing
-    }
+    console.log(`🔄 Proceeding with automatic schedule check`);
+    // Manual override system removed - not the real solution
     
     const schedule = this.customSchedules[todaySchedule.situation];
     const deviceId = todaySchedule.deviceId;
     
     console.log(`📋 ${todaySchedule.situation} schedule:`, schedule);
     
-    // Find what action should be active right now
+    // Safety check: ensure schedule is iterable
+    if (!schedule || !Array.isArray(schedule)) {
+      console.warn(`Schedule for ${todaySchedule.situation} is not an array:`, schedule);
+      return;
+    }
+    
+    // Find FUTURE events that should execute NOW (within the last minute)
     let currentAction: 'on' | 'off' | null = null;
-    let lastActionTime = -1;
     
     for (const entry of schedule) {
       const [hours, minutes] = entry.time.split(':').map(Number);
@@ -143,11 +144,11 @@ export class PlugScheduler {
       
       console.log(`⏰ Checking ${entry.time} (${entryTime} min) ${entry.action} - ${entryTime <= currentTime ? 'PAST' : 'FUTURE'}`);
       
-      // Only consider past entries (that should have already executed)
-      if (entryTime <= currentTime && entryTime > lastActionTime) {
+      // Only execute events that are happening RIGHT NOW (within last minute)
+      // NOT past events - those are done and manual control takes precedence
+      if (entryTime <= currentTime && entryTime > (currentTime - 1)) {
         currentAction = entry.action;
-        lastActionTime = entryTime;
-        console.log(`✅ Most recent action: ${entry.action} at ${entry.time}`);
+        console.log(`⚡ EXECUTING NOW: ${entry.action} at ${entry.time} (fresh event)`);
       }
     }
     
@@ -248,13 +249,8 @@ export class PlugScheduler {
     
     console.log(`🔄 Starting SIMPLE schedule checker (checks every 60 seconds)`);
     
-    // Check immediately on start (no manual override complexity)
-    setTimeout(() => {
-      console.log(`⚡ First schedule check starting...`);
-      this.checkAndExecuteSchedule();
-    }, 2000);
-    
-    // Then check every 60 seconds
+    // NO immediate check on page load - this was causing refresh override
+    // Only run scheduled checks every 60 seconds
     this.schedulerInterval = setInterval(() => {
       this.checkAndExecuteSchedule();
     }, 60000);
@@ -285,6 +281,12 @@ export class PlugScheduler {
     
     const schedule = this.customSchedules[todaySchedule.situation];
     let nextAction = null;
+    
+    // Safety check: ensure schedule is iterable
+    if (!schedule || !Array.isArray(schedule)) {
+      console.warn(`Schedule for ${todaySchedule.situation} is not an array:`, schedule);
+      return { situation: todaySchedule.situation, nextAction: null };
+    }
     
     for (const entry of schedule) {
       const [hours, minutes] = entry.time.split(':').map(Number);

@@ -62,21 +62,11 @@ export class TuyaAPI {
 
   async turnOn(deviceId: string, isManual: boolean = false): Promise<boolean> {
     const result = this.controlDevice(deviceId, 'switch_1', true);
-    if (isManual) {
-      // Import scheduler here to avoid circular dependency
-      const { scheduler } = await import('./scheduler');
-      scheduler.setManualOverride(60); // 1 hour manual override
-    }
     return result;
   }
 
   async turnOff(deviceId: string, isManual: boolean = false): Promise<boolean> {
     const result = this.controlDevice(deviceId, 'switch_1', false);
-    if (isManual) {
-      // Import scheduler here to avoid circular dependency  
-      const { scheduler } = await import('./scheduler');
-      scheduler.setManualOverride(60); // 1 hour manual override
-    }
     return result;
   }
 

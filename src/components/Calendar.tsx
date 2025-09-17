@@ -2,10 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths } from 'date-fns';
-import { ChevronLeft, ChevronRight, BriefcaseIcon, Coffee } from 'lucide-react';
+import { ChevronLeft, ChevronRight, BriefcaseIcon, Coffee, Lightbulb, Laptop, Usb } from 'lucide-react';
 import { scheduler, type SituationType } from '@/lib/scheduler';
 
-const LIGHTS_DEVICE_ID = 'a3e31a88528a6efc15yf4o'; // Smart Life app device - WORKING
+const DEVICES = [
+  { id: 'a3e31a88528a6efc15yf4o', name: 'Lights', icon: Lightbulb, app: 'Smart Life' },
+  { id: 'a34b0f81d957d06e4aojr1', name: 'Laptop', icon: Laptop, app: 'Smart Life' },
+  { id: 'a3240659645e83dcfdtng7', name: 'USB Hub', icon: Usb, app: 'Smart Life' }
+];
 
 interface CalendarProps {
   onDateSelect?: (date: Date, situation: SituationType) => void;
@@ -15,6 +19,7 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showSituationModal, setShowSituationModal] = useState(false);
+  const [selectedDevice, setSelectedDevice] = useState(DEVICES[0]); // Default to lights
   const [schedules, setSchedules] = useState(scheduler.getAllSchedules());
   const [isClient, setIsClient] = useState(false);
 
@@ -40,10 +45,11 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
   const handleSituationSelect = (situation: SituationType) => {
     if (selectedDate) {
       const dateString = format(selectedDate, 'yyyy-MM-dd');
-      scheduler.setSituation(dateString, situation, LIGHTS_DEVICE_ID);
+      scheduler.setSituation(dateString, situation, selectedDevice.id);
       setSchedules(scheduler.getAllSchedules());
       onDateSelect?.(selectedDate, situation);
       setShowSituationModal(false);
+      setSelectedDevice(DEVICES[0]); // Reset to default
       setSelectedDate(null);
     }
   };
@@ -137,6 +143,22 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
             <h3 className="text-lg font-semibold mb-4 text-center">
               Select situation for {format(selectedDate, 'MMMM d, yyyy')}
             </h3>
+            
+            {/* Device Selector */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Select Device:</label>
+              <select 
+                value={DEVICES.findIndex(d => d.id === selectedDevice.id)} 
+                onChange={(e) => setSelectedDevice(DEVICES[Number(e.target.value)])}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+              >
+                {DEVICES.map((device, index) => (
+                  <option key={device.id} value={index}>
+                    {device.name} ({device.app})
+                  </option>
+                ))}
+              </select>
+            </div>
             
             <div className="space-y-3">
               <button

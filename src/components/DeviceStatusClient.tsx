@@ -5,13 +5,13 @@ import { Lightbulb, Laptop, Usb, Power, Wifi, WifiOff } from 'lucide-react';
 import { tuyaAPI } from '@/lib/tuya-api';
 
 const LIGHTS_DEVICE_ID = 'a3e31a88528a6efc15yf4o'; // Smart Life app device - WORKING
-const LAPTOP_DEVICE_ID = 'a34b0f81d957d06e4aojr1'; // Spatial app device - TEST
-const USB_HUB_DEVICE_ID = 'a3240659645e83dcfdtng7'; // Spatial app device - TEST
+const LAPTOP_DEVICE_ID = 'a34b0f81d957d06e4aojr1'; // Smart Life app device - WORKING
+const USB_HUB_DEVICE_ID = 'a3240659645e83dcfdtng7'; // Smart Life app device - WORKING
 
 const DEVICES = [
-  { id: LIGHTS_DEVICE_ID, name: 'Lights Plug', icon: Lightbulb, app: 'Smart Life' },
-  { id: LAPTOP_DEVICE_ID, name: 'Laptop Plug', icon: Laptop, app: 'Spatial' },
-  { id: USB_HUB_DEVICE_ID, name: 'USB Hub', icon: Usb, app: 'Spatial' }
+  { id: LIGHTS_DEVICE_ID, name: 'Lights', icon: Lightbulb, app: 'Smart Life' },
+  { id: LAPTOP_DEVICE_ID, name: 'Laptop', icon: Laptop, app: 'Smart Life' },
+  { id: USB_HUB_DEVICE_ID, name: 'USB Hub', icon: Usb, app: 'Smart Life' }
 ];
 
 function DeviceStatusClient() {

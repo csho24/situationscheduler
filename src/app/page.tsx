@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Calendar, Settings, Laptop, Edit, Plus } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, Settings, Laptop, Edit, Plus, Lightbulb, Usb, Power } from 'lucide-react';
 import CalendarComponent from '@/components/Calendar';
 import ScheduleEditor from '@/components/ScheduleEditor';
 import dynamic from 'next/dynamic';
+import { tuyaAPI } from '@/lib/tuya-api';
 
 const DeviceStatus = dynamic(() => import('@/components/DeviceStatus'), {
   ssr: false,
@@ -12,32 +13,142 @@ const DeviceStatus = dynamic(() => import('@/components/DeviceStatus'), {
 });
 import { scheduler, type SituationType, DEFAULT_SCHEDULES, type ScheduleEntry } from '@/lib/scheduler';
 
+const DEVICES = [
+  { id: 'a3e31a88528a6efc15yf4o', name: 'Lights', app: 'Smart Life', icon: Lightbulb },
+  { id: 'a34b0f81d957d06e4aojr1', name: 'Laptop', app: 'Smart Life', icon: Laptop },
+  { id: 'a3240659645e83dcfdtng7', name: 'USB Hub', app: 'Smart Life', icon: Usb }
+];
+
+function DeviceControl({ device }: { device: typeof DEVICES[0] }) {
+  const [isOn, setIsOn] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    checkStatus();
+  }, []);
+
+  const checkStatus = async () => {
+    if (!mounted) return;
+    setLoading(true);
+    try {
+      const status = await tuyaAPI.getDeviceStatus(device.id);
+      setIsOn(status.isOn);
+    } catch (error) {
+      console.error(`Error checking ${device.name} status:`, error);
+      // Set a default state instead of leaving it null
+      setIsOn(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleDevice = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      if (isOn) {
+        await tuyaAPI.turnOff(device.id);
+        setIsOn(false);
+      } else {
+        await tuyaAPI.turnOn(device.id);
+        setIsOn(true);
+      }
+    } catch (error) {
+      console.error('Error toggling device:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!mounted) return null;
+
+  return (
+    <div className="flex items-center gap-2 p-2 border rounded-lg">
+      <div className="p-1 bg-blue-100 rounded">
+        <device.icon size={14} className="text-blue-600" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium text-gray-800 truncate">{device.name}</div>
+        <div className="text-xs text-gray-500">{device.app}</div>
+      </div>
+      
+      {/* Toggle Switch */}
+      <button
+        onClick={toggleDevice}
+        disabled={loading}
+        className={`
+          relative inline-flex h-5 w-9 items-center rounded-full transition-colors
+          ${loading 
+            ? 'bg-gray-300 cursor-not-allowed' 
+            : isOn 
+            ? 'bg-green-600' 
+            : 'bg-gray-200'
+          }
+        `}
+      >
+        <span
+          className={`
+            inline-block h-3 w-3 transform rounded-full bg-white transition-transform
+            ${isOn ? 'translate-x-5' : 'translate-x-1'}
+          `}
+        />
+      </button>
+    </div>
+  );
+}
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'calendar' | 'status' | 'settings'>('calendar');
   const [notification, setNotification] = useState<string | null>(null);
   const [editingSituation, setEditingSituation] = useState<SituationType | null>(null);
+  const [selectedDevice, setSelectedDevice] = useState(DEVICES[0]); // For settings page
   const [todayInfo, setTodayInfo] = useState(scheduler.getTodayScheduleInfo());
+  const [currentTime, setCurrentTime] = useState(new Date());
   const [customSchedules, setCustomSchedules] = useState(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('custom-schedules');
+      const saved = localStorage.getItem('per-device-schedules');
       if (saved) {
         try {
           return JSON.parse(saved);
         } catch {
-          return DEFAULT_SCHEDULES;
+          // Create default schedules for each device
+          const defaultPerDevice = {};
+          DEVICES.forEach(device => {
+            defaultPerDevice[device.id] = DEFAULT_SCHEDULES;
+          });
+          return defaultPerDevice;
         }
       }
     }
-    return DEFAULT_SCHEDULES;
+    // Create default schedules for each device
+    const defaultPerDevice = {};
+    DEVICES.forEach(device => {
+      defaultPerDevice[device.id] = DEFAULT_SCHEDULES;
+    });
+    return defaultPerDevice;
   });
 
   // Update scheduler with custom schedules on load
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
-      scheduler.updateCustomSchedules(customSchedules);
+      // For now, use the first device's schedules as default for the scheduler
+      // TODO: Update scheduler to handle per-device schedules
+      const firstDeviceSchedules = customSchedules[DEVICES[0].id] || DEFAULT_SCHEDULES;
+      scheduler.updateCustomSchedules(firstDeviceSchedules);
       setTodayInfo(scheduler.getTodayScheduleInfo());
     }
   }, [customSchedules]);
+
+  // Update current time every minute for live schedule highlighting
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, []);
 
   const handleDateSelect = (date: Date, situation: SituationType) => {
     const dateString = date.toLocaleDateString();
@@ -59,7 +170,7 @@ export default function Home() {
   const scheduleToday = (situation: SituationType) => {
     const today = new Date();
     const dateString = today.toISOString().split('T')[0];
-    scheduler.setSituation(dateString, situation, 'a3e31a88528a6efc15yf4o'); // Smart Life device that works
+    scheduler.setSituation(dateString, situation, DEVICES[0].id); // Default to lights device
     setTodayInfo(scheduler.getTodayScheduleInfo());
     setNotification(`Today scheduled as ${situation} day - auto-execution active!`);
     setTimeout(() => setNotification(null), 3000);
@@ -68,21 +179,25 @@ export default function Home() {
   const handleSaveSchedule = (situation: SituationType, schedule: ScheduleEntry[]) => {
     const newSchedules = {
       ...customSchedules,
-      [situation]: schedule
+      [selectedDevice.id]: {
+        ...customSchedules[selectedDevice.id],
+        [situation]: schedule
+      }
     };
     setCustomSchedules(newSchedules);
     
     // Save to localStorage
     if (typeof window !== 'undefined') {
-      localStorage.setItem('custom-schedules', JSON.stringify(newSchedules));
+      localStorage.setItem('per-device-schedules', JSON.stringify(newSchedules));
     }
     
-    // Update the scheduler to use new custom schedules
-    scheduler.updateCustomSchedules(newSchedules);
+    // Update the scheduler to use new custom schedules for this device
+    const deviceSchedules = newSchedules[selectedDevice.id];
+    scheduler.updateCustomSchedules(deviceSchedules);
     setTodayInfo(scheduler.getTodayScheduleInfo());
     
     setEditingSituation(null);
-    setNotification(`${situation} schedule updated and activated!`);
+    setNotification(`${selectedDevice.name} ${situation} schedule updated!`);
     setTimeout(() => setNotification(null), 3000);
   };
 
@@ -115,13 +230,6 @@ export default function Home() {
               >
                 Rest Day
               </button>
-              <button
-                onClick={executeToday}
-                className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                title="Force immediate execution of all scheduled actions for today"
-              >
-                Force Run All
-              </button>
             </div>
           </div>
         </div>
@@ -133,8 +241,8 @@ export default function Home() {
           <div className="flex space-x-8">
             {[
               { id: 'calendar', label: 'Calendar', icon: Calendar },
-              { id: 'status', label: 'Device Status', icon: Laptop },
-              { id: 'settings', label: 'Settings', icon: Settings },
+              { id: 'status', label: 'Device Management', icon: Laptop },
+              { id: 'settings', label: 'Schedule', icon: Settings },
             ].map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
@@ -206,7 +314,16 @@ export default function Home() {
                 Monitor and manually control your connected devices.
               </p>
             </div>
-            <DeviceStatus />
+            
+            {/* Device Controls */}
+            <div className="bg-white rounded-lg shadow p-6 max-w-md mx-auto">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Device Controls</h3>
+              <div className="space-y-3">
+                {DEVICES.map((device) => (
+                  <DeviceControl key={device.id} device={device} />
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -219,13 +336,29 @@ export default function Home() {
               </p>
             </div>
             
+            {/* Device Selector */}
+            <div className="max-w-lg mx-auto">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Select Device to Configure:</label>
+              <select 
+                value={DEVICES.findIndex(d => d.id === selectedDevice.id)} 
+                onChange={(e) => setSelectedDevice(DEVICES[Number(e.target.value)])}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
+              >
+                {DEVICES.map((device, index) => (
+                  <option key={device.id} value={index}>
+                    {device.name} ({device.app})
+                  </option>
+                ))}
+              </select>
+            </div>
+            
             <div className="max-w-lg mx-auto space-y-6">
               {/* Work Day Schedule */}
               <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                     <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                    Work Day Schedule
+                    Work Day Schedule - {selectedDevice.name}
                   </h3>
                   <button
                     onClick={() => setEditingSituation('work')}
@@ -236,18 +369,64 @@ export default function Home() {
                   </button>
                 </div>
                 <div className="space-y-2">
-                  {customSchedules.work.map((entry, index) => (
-                    <div key={index} className="flex justify-between items-center py-2">
-                      <span className="text-gray-600">{entry.time}</span>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        entry.action === 'on' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
+                  {(() => {
+                    const workSchedule = customSchedules[selectedDevice.id]?.work || DEFAULT_SCHEDULES.work;
+                    const currentTimeMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+                    
+                    // Check if work schedule is active today (regardless of device)
+                    const today = new Date().toISOString().split('T')[0];
+                    const todaySchedule = scheduler.getSituation(today);
+                    const isActiveToday = todaySchedule?.situation === 'work';
+                    
+                    // Find the most recent schedule entry that should be active (including overnight)
+                    let activeIndex = -1;
+                    let bestTimeDiff = Infinity;
+                    
+                    if (Array.isArray(workSchedule)) {
+                      workSchedule.forEach((entry, index) => {
+                        const [hours, minutes] = entry.time.split(':').map(Number);
+                        const entryTime = hours * 60 + minutes;
+                        
+                        // Calculate time difference, considering overnight schedules
+                        let timeDiff;
+                        if (entryTime <= currentTimeMinutes) {
+                          // Same day - entry is before current time
+                          timeDiff = currentTimeMinutes - entryTime;
+                        } else {
+                          // Overnight - entry was yesterday (24 hours ago + difference)
+                          timeDiff = (24 * 60) - entryTime + currentTimeMinutes;
+                        }
+                        
+                        // Find the entry with the smallest positive time difference (most recent)
+                        if (timeDiff >= 0 && timeDiff < bestTimeDiff) {
+                          activeIndex = index;
+                          bestTimeDiff = timeDiff;
+                        }
+                      });
+                    }
+                    
+                    return Array.isArray(workSchedule) ? workSchedule.map((entry, index) => (
+                      <div key={index} className={`flex items-center gap-4 py-2 px-3 rounded-lg transition-colors ${
+                        index === activeIndex && isActiveToday
+                          ? 'bg-blue-50 border-2 border-blue-200' 
+                          : 'hover:bg-gray-50'
                       }`}>
-                        Turn {entry.action.toUpperCase()}
-                      </span>
-                    </div>
-                  ))}
+                        <span className={`w-16 ${
+                          index === activeIndex && isActiveToday ? 'text-blue-700 font-medium' : 'text-gray-600'
+                        }`}>{entry.time}</span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          entry.action === 'on' 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          Turn {entry.action.toUpperCase()}
+                        </span>
+                        {index === activeIndex && isActiveToday && (
+                          <span className="text-blue-600 text-xs ml-auto">← Active Now</span>
+                        )}
+                      </div>
+                    )) : [];
+                  })()}
                 </div>
               </div>
 
@@ -256,7 +435,7 @@ export default function Home() {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                     <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                    Rest Day Schedule
+                    Rest Day Schedule - {selectedDevice.name}
                   </h3>
                   <button
                     onClick={() => setEditingSituation('rest')}
@@ -267,18 +446,64 @@ export default function Home() {
                   </button>
                 </div>
                 <div className="space-y-2">
-                  {customSchedules.rest.map((entry, index) => (
-                    <div key={index} className="flex justify-between items-center py-2">
-                      <span className="text-gray-600">{entry.time}</span>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        entry.action === 'on' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
+                  {(() => {
+                    const restSchedule = customSchedules[selectedDevice.id]?.rest || DEFAULT_SCHEDULES.rest;
+                    const currentTimeMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
+                    
+                    // Check if rest schedule is active today (regardless of device)
+                    const today = new Date().toISOString().split('T')[0];
+                    const todaySchedule = scheduler.getSituation(today);
+                    const isActiveToday = todaySchedule?.situation === 'rest';
+                    
+                    // Find the most recent schedule entry that should be active (including overnight)
+                    let activeIndex = -1;
+                    let bestTimeDiff = Infinity;
+                    
+                    if (Array.isArray(restSchedule)) {
+                      restSchedule.forEach((entry, index) => {
+                        const [hours, minutes] = entry.time.split(':').map(Number);
+                        const entryTime = hours * 60 + minutes;
+                        
+                        // Calculate time difference, considering overnight schedules
+                        let timeDiff;
+                        if (entryTime <= currentTimeMinutes) {
+                          // Same day - entry is before current time
+                          timeDiff = currentTimeMinutes - entryTime;
+                        } else {
+                          // Overnight - entry was yesterday (24 hours ago + difference)
+                          timeDiff = (24 * 60) - entryTime + currentTimeMinutes;
+                        }
+                        
+                        // Find the entry with the smallest positive time difference (most recent)
+                        if (timeDiff >= 0 && timeDiff < bestTimeDiff) {
+                          activeIndex = index;
+                          bestTimeDiff = timeDiff;
+                        }
+                      });
+                    }
+                    
+                    return Array.isArray(restSchedule) ? restSchedule.map((entry, index) => (
+                      <div key={index} className={`flex items-center gap-4 py-2 px-3 rounded-lg transition-colors ${
+                        index === activeIndex && isActiveToday
+                          ? 'bg-blue-50 border-2 border-blue-200' 
+                          : 'hover:bg-gray-50'
                       }`}>
-                        Turn {entry.action.toUpperCase()}
-                      </span>
-                    </div>
-                  ))}
+                        <span className={`w-16 ${
+                          index === activeIndex && isActiveToday ? 'text-blue-700 font-medium' : 'text-gray-600'
+                        }`}>{entry.time}</span>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          entry.action === 'on' 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          Turn {entry.action.toUpperCase()}
+                        </span>
+                        {index === activeIndex && isActiveToday && (
+                          <span className="text-blue-600 text-xs ml-auto">← Active Now</span>
+                        )}
+                      </div>
+                    )) : [];
+                  })()}
                 </div>
               </div>
 
@@ -296,24 +521,6 @@ export default function Home() {
                 </button>
               </div>
 
-              {/* Device Info */}
-              <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Connected Devices</h3>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-blue-100 rounded-lg">
-                        <Laptop size={20} className="text-blue-600" />
-                      </div>
-                      <div>
-                        <div className="font-medium text-gray-800">Laptop Plug</div>
-                        <div className="text-sm text-gray-600">ID: a34b0f81d957d06e4aojr1</div>
-                      </div>
-                    </div>
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         )}
@@ -323,7 +530,7 @@ export default function Home() {
       {editingSituation && (
         <ScheduleEditor
           situation={editingSituation}
-          currentSchedule={customSchedules[editingSituation]}
+          currentSchedule={(customSchedules[selectedDevice.id]?.[editingSituation]) || DEFAULT_SCHEDULES[editingSituation]}
           onSave={handleSaveSchedule}
           onCancel={() => setEditingSituation(null)}
         />
