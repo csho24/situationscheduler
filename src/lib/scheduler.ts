@@ -35,7 +35,7 @@ export const DEFAULT_SCHEDULES: Record<SituationType, ScheduleEntry[]> = {
 
 export class PlugScheduler {
   private schedules: Map<string, DaySchedule> = new Map();
-  private customSchedules: Record<SituationType, ScheduleEntry[]> = DEFAULT_SCHEDULES;
+  private customSchedules: Record<string, Record<SituationType, ScheduleEntry[]>> = {};
   private lastScheduleCheck: number = 0;
   private manualOverrideUntil: number = 0; // Timestamp until which manual control is active
   private schedulerInterval: NodeJS.Timeout | null = null;
@@ -66,21 +66,41 @@ export class PlugScheduler {
 
   private loadCustomSchedules(): void {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('custom-schedules');
+      const saved = localStorage.getItem('per-device-schedules');
       if (saved) {
         try {
           this.customSchedules = JSON.parse(saved);
         } catch {
-          this.customSchedules = DEFAULT_SCHEDULES;
+          // Initialize with default schedules for all devices
+          const DEVICES = [
+            { id: 'a3e31a88528a6efc15yf4o', name: 'Lights' },
+            { id: 'a34b0f81d957d06e4aojr1', name: 'Laptop' },
+            { id: 'a3240659645e83dcfdtng7', name: 'USB Hub' }
+          ];
+          this.customSchedules = {};
+          DEVICES.forEach(device => {
+            this.customSchedules[device.id] = DEFAULT_SCHEDULES;
+          });
         }
+      } else {
+        // Initialize with default schedules for all devices
+        const DEVICES = [
+          { id: 'a3e31a88528a6efc15yf4o', name: 'Lights' },
+          { id: 'a34b0f81d957d06e4aojr1', name: 'Laptop' },
+          { id: 'a3240659645e83dcfdtng7', name: 'USB Hub' }
+        ];
+        this.customSchedules = {};
+        DEVICES.forEach(device => {
+          this.customSchedules[device.id] = DEFAULT_SCHEDULES;
+        });
       }
     }
   }
 
-  updateCustomSchedules(schedules: Record<SituationType, ScheduleEntry[]>): void {
-    this.customSchedules = schedules;
-    localStorage.setItem('custom-schedules', JSON.stringify(schedules));
-    console.log(`📋 Updated custom schedules:`, schedules);
+  updateCustomSchedules(allDeviceSchedules: Record<string, Record<SituationType, ScheduleEntry[]>>): void {
+    this.customSchedules = allDeviceSchedules;
+    localStorage.setItem('per-device-schedules', JSON.stringify(allDeviceSchedules));
+    console.log(`📋 Updated custom schedules for all devices:`, allDeviceSchedules);
   }
 
   // Clean up when scheduler is destroyed
@@ -121,64 +141,75 @@ export class PlugScheduler {
     
     console.log(`📋 Today's schedule: ${todaySchedule.situation} day`);
     
-    console.log(`🔄 Proceeding with automatic schedule check`);
-    // Manual override system removed - not the real solution
+    // Get device names for lookup
+    const DEVICES = [
+      { id: 'a3e31a88528a6efc15yf4o', name: 'Lights' },
+      { id: 'a34b0f81d957d06e4aojr1', name: 'Laptop' },
+      { id: 'a3240659645e83dcfdtng7', name: 'USB Hub' }
+    ];
     
-    const schedule = this.customSchedules[todaySchedule.situation];
-    const deviceId = todaySchedule.deviceId;
-    
-    console.log(`📋 ${todaySchedule.situation} schedule:`, schedule);
-    
-    // Safety check: ensure schedule is iterable
-    if (!schedule || !Array.isArray(schedule)) {
-      console.warn(`Schedule for ${todaySchedule.situation} is not an array:`, schedule);
-      return;
-    }
-    
-    // Find FUTURE events that should execute NOW (within the last minute)
-    let currentAction: 'on' | 'off' | null = null;
-    
-    for (const entry of schedule) {
-      const [hours, minutes] = entry.time.split(':').map(Number);
-      const entryTime = hours * 60 + minutes;
-      
-      console.log(`⏰ Checking ${entry.time} (${entryTime} min) ${entry.action} - ${entryTime <= currentTime ? 'PAST' : 'FUTURE'}`);
-      
-      // Only execute events that are happening RIGHT NOW (within last minute)
-      // NOT past events - those are done and manual control takes precedence
-      if (entryTime <= currentTime && entryTime > (currentTime - 1)) {
-        currentAction = entry.action;
-        console.log(`⚡ EXECUTING NOW: ${entry.action} at ${entry.time} (fresh event)`);
+    // Check each device's schedule
+    for (const device of DEVICES) {
+      const deviceSchedules = this.customSchedules[device.id];
+      if (!deviceSchedules || !deviceSchedules[todaySchedule.situation]) {
+        console.log(`📅 No ${todaySchedule.situation} schedule for ${device.name}`);
+        continue;
       }
-    }
-    
-    if (currentAction) {
-      // Get current device state to avoid unnecessary commands
-      try {
-        const deviceStatus = await tuyaAPI.getDeviceStatus(deviceId);
-        const currentState = deviceStatus.result?.status?.find(s => s.code === 'switch_1')?.value;
-        const targetState = currentAction === 'on';
-        
-        if (currentState === targetState) {
-          console.log(`✅ Device already in correct state (${currentState ? 'ON' : 'OFF'}) - no action needed`);
-          return;
-        }
-        
-        console.log(`⚡ Device state mismatch: current=${currentState ? 'ON' : 'OFF'}, target=${targetState ? 'ON' : 'OFF'}`);
-        console.log(`⚡ Schedule says: ${currentAction.toUpperCase()} (from ${Math.floor(lastActionTime/60)}:${(lastActionTime%60).toString().padStart(2,'0')})`);
-        
-        if (currentAction === 'on') {
-          await tuyaAPI.turnOn(deviceId);
-          console.log(`✅ Turned ON device ${deviceId} via schedule`);
-        } else {
-          await tuyaAPI.turnOff(deviceId);
-          console.log(`✅ Turned OFF device ${deviceId} via schedule`);
-        }
-      } catch (error) {
-        console.error(`❌ Failed to execute scheduled ${currentAction}:`, error);
+      
+      const schedule = deviceSchedules[todaySchedule.situation];
+      
+      // Safety check: ensure schedule is iterable
+      if (!schedule || !Array.isArray(schedule)) {
+        console.warn(`Schedule for ${device.name} ${todaySchedule.situation} is not an array:`, schedule);
+        continue;
       }
-    } else {
-      console.log(`📋 No scheduled action needed at ${now.toLocaleTimeString()}`);
+      
+      console.log(`📋 ${device.name} ${todaySchedule.situation} schedule:`, schedule);
+      
+      // Find FUTURE events that should execute NOW (within the last minute)
+      let currentAction: 'on' | 'off' | null = null;
+      
+      for (const entry of schedule) {
+        const [hours, minutes] = entry.time.split(':').map(Number);
+        const entryTime = hours * 60 + minutes;
+        
+        console.log(`⏰ ${device.name}: Checking ${entry.time} (${entryTime} min) ${entry.action} - ${entryTime <= currentTime ? 'PAST' : 'FUTURE'}`);
+        
+        // Only execute events that are happening RIGHT NOW (within last minute)
+        // NOT past events - those are done and manual control takes precedence
+        if (entryTime <= currentTime && entryTime > (currentTime - 1)) {
+          currentAction = entry.action;
+          console.log(`⚡ ${device.name} EXECUTING NOW: ${entry.action} at ${entry.time} (fresh event)`);
+        }
+      }
+      
+      if (currentAction) {
+        // Get current device state to avoid unnecessary commands
+        try {
+          const deviceStatus = await tuyaAPI.getDeviceStatus(device.id);
+          const currentState = deviceStatus.result?.status?.find(s => s.code === 'switch_1')?.value;
+          const targetState = currentAction === 'on';
+          
+          if (currentState === targetState) {
+            console.log(`✅ ${device.name} already in correct state (${currentState ? 'ON' : 'OFF'}) - no action needed`);
+            continue;
+          }
+          
+          console.log(`⚡ ${device.name} state mismatch: current=${currentState ? 'ON' : 'OFF'}, target=${targetState ? 'ON' : 'OFF'}`);
+          
+          if (currentAction === 'on') {
+            await tuyaAPI.turnOn(device.id);
+            console.log(`✅ Turned ON ${device.name} via schedule`);
+          } else {
+            await tuyaAPI.turnOff(device.id);
+            console.log(`✅ Turned OFF ${device.name} via schedule`);
+          }
+        } catch (error) {
+          console.error(`❌ Failed to execute schedule action for ${device.name}:`, error);
+        }
+      } else {
+        console.log(`⏰ ${device.name}: No schedule actions needed right now`);
+      }
     }
   }
 
@@ -279,23 +310,77 @@ export class PlugScheduler {
     const now = new Date();
     const currentTime = now.getHours() * 60 + now.getMinutes();
     
-    const schedule = this.customSchedules[todaySchedule.situation];
-    let nextAction = null;
+    // Collect all upcoming events from all devices
+    const upcomingEvents: Array<{
+      deviceName: string;
+      time: string;
+      action: 'on' | 'off';
+      timeInMinutes: number;
+    }> = [];
     
-    // Safety check: ensure schedule is iterable
-    if (!schedule || !Array.isArray(schedule)) {
-      console.warn(`Schedule for ${todaySchedule.situation} is not an array:`, schedule);
+    // Get device names for lookup
+    const DEVICES = [
+      { id: 'a3e31a88528a6efc15yf4o', name: 'Lights' },
+      { id: 'a34b0f81d957d06e4aojr1', name: 'Laptop' },
+      { id: 'a3240659645e83dcfdtng7', name: 'USB Hub' }
+    ];
+    
+    // Check each device's schedule
+    for (const device of DEVICES) {
+      const deviceSchedules = this.customSchedules[device.id];
+      if (!deviceSchedules || !deviceSchedules[todaySchedule.situation]) continue;
+      
+      const schedule = deviceSchedules[todaySchedule.situation];
+      
+      // Safety check: ensure schedule is iterable
+      if (!schedule || !Array.isArray(schedule)) {
+        console.warn(`Schedule for ${device.name} ${todaySchedule.situation} is not an array:`, schedule);
+        continue;
+      }
+      
+      for (const entry of schedule) {
+        const [hours, minutes] = entry.time.split(':').map(Number);
+        const entryTime = hours * 60 + minutes;
+        
+        if (entryTime > currentTime) {
+          upcomingEvents.push({
+            deviceName: device.name,
+            time: entry.time,
+            action: entry.action,
+            timeInMinutes: entryTime
+          });
+        }
+      }
+    }
+    
+    if (upcomingEvents.length === 0) {
       return { situation: todaySchedule.situation, nextAction: null };
     }
     
-    for (const entry of schedule) {
-      const [hours, minutes] = entry.time.split(':').map(Number);
-      const entryTime = hours * 60 + minutes;
+    // Sort by time and find the earliest
+    upcomingEvents.sort((a, b) => a.timeInMinutes - b.timeInMinutes);
+    const earliestTime = upcomingEvents[0].timeInMinutes;
+    const eventsAtEarliestTime = upcomingEvents.filter(event => event.timeInMinutes === earliestTime);
+    
+    // Format the next action
+    let nextAction = '';
+    if (eventsAtEarliestTime.length === 1) {
+      const event = eventsAtEarliestTime[0];
+      nextAction = `${event.deviceName} ${event.action.toUpperCase()} at ${event.time}`;
+    } else {
+      // Group by action
+      const onDevices = eventsAtEarliestTime.filter(e => e.action === 'on').map(e => e.deviceName);
+      const offDevices = eventsAtEarliestTime.filter(e => e.action === 'off').map(e => e.deviceName);
       
-      if (entryTime > currentTime) {
-        nextAction = `${entry.action.toUpperCase()} at ${entry.time}`;
-        break;
+      const actionParts = [];
+      if (onDevices.length > 0) {
+        actionParts.push(`${onDevices.join(' + ')} ON`);
       }
+      if (offDevices.length > 0) {
+        actionParts.push(`${offDevices.join(' + ')} OFF`);
+      }
+      
+      nextAction = `${actionParts.join(', ')} at ${eventsAtEarliestTime[0].time}`;
     }
     
     return { situation: todaySchedule.situation, nextAction };

@@ -19,26 +19,41 @@ const DEVICES = [
   { id: 'a3240659645e83dcfdtng7', name: 'USB Hub', app: 'Smart Life', icon: Usb }
 ];
 
-function DeviceControl({ device }: { device: typeof DEVICES[0] }) {
-  const [isOn, setIsOn] = useState<boolean | null>(null);
+function DeviceControl({ device, deviceStates, setDeviceStates, deviceStatesInitialized }: { 
+  device: typeof DEVICES[0], 
+  deviceStates: Record<string, boolean>,
+  setDeviceStates: React.Dispatch<React.SetStateAction<Record<string, boolean>>>,
+  deviceStatesInitialized: boolean
+}) {
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const isOn = deviceStates[device.id] ?? false;
 
   useEffect(() => {
     setMounted(true);
-    checkStatus();
-  }, []);
+    // Only check status if the main initialization hasn't happened yet
+    if (!deviceStatesInitialized) {
+      checkStatus();
+    }
+  }, [deviceStatesInitialized]);
 
   const checkStatus = async () => {
     if (!mounted) return;
     setLoading(true);
     try {
       const status = await tuyaAPI.getDeviceStatus(device.id);
-      setIsOn(status.isOn);
+      
+      // Extract the switch status from the response
+      let isOn = false;
+      if (status.result && status.result.status) {
+        const switchStatus = status.result.status.find((item: any) => item.code === 'switch_1');
+        isOn = switchStatus ? Boolean(switchStatus.value) : false;
+      }
+      
+      setDeviceStates(prev => ({ ...prev, [device.id]: isOn }));
     } catch (error) {
       console.error(`Error checking ${device.name} status:`, error);
-      // Set a default state instead of leaving it null
-      setIsOn(false);
+      setDeviceStates(prev => ({ ...prev, [device.id]: false }));
     } finally {
       setLoading(false);
     }
@@ -50,10 +65,10 @@ function DeviceControl({ device }: { device: typeof DEVICES[0] }) {
     try {
       if (isOn) {
         await tuyaAPI.turnOff(device.id);
-        setIsOn(false);
+        setDeviceStates(prev => ({ ...prev, [device.id]: false }));
       } else {
         await tuyaAPI.turnOn(device.id);
-        setIsOn(true);
+        setDeviceStates(prev => ({ ...prev, [device.id]: true }));
       }
     } catch (error) {
       console.error('Error toggling device:', error);
@@ -99,12 +114,119 @@ function DeviceControl({ device }: { device: typeof DEVICES[0] }) {
   );
 }
 
+function MasterToggle({ deviceStates, setDeviceStates, deviceStatesInitialized }: { 
+  deviceStates: Record<string, boolean>,
+  setDeviceStates: React.Dispatch<React.SetStateAction<Record<string, boolean>>>,
+  deviceStatesInitialized: boolean
+}) {
+  const [loading, setLoading] = useState(false);
+
+  const toggleAllDevices = async () => {
+    if (loading || !deviceStatesInitialized) return;
+    
+    // Determine if we should turn all ON or all OFF
+    const statusValues = Object.values(deviceStates);
+    const allOn = statusValues.every(status => status === true);
+    const targetState = !allOn; // If all are on, turn off; otherwise turn on
+    
+    // If turning OFF, show confirmation popup
+    if (!targetState) {
+      const devicesOnCount = statusValues.filter(status => status === true).length;
+      if (devicesOnCount > 0) {
+        const confirmed = window.confirm(`Turn off ${devicesOnCount} device${devicesOnCount > 1 ? 's' : ''}?`);
+        if (!confirmed) {
+          return; // User cancelled
+        }
+      }
+    }
+    
+    setLoading(true);
+    
+    try {
+      // Toggle all devices to the target state
+      const promises = DEVICES.map(async (device) => {
+        try {
+          if (targetState) {
+            await tuyaAPI.turnOn(device.id);
+          } else {
+            await tuyaAPI.turnOff(device.id);
+          }
+          return { deviceId: device.id, success: true, state: targetState };
+        } catch (error) {
+          console.error(`Error toggling ${device.name}:`, error);
+          return { deviceId: device.id, success: false, state: deviceStates[device.id] };
+        }
+      });
+
+      const results = await Promise.all(promises);
+      
+      // Update the status based on results
+      const newStatuses = { ...deviceStates };
+      results.forEach(result => {
+        if (result.success) {
+          newStatuses[result.deviceId] = result.state;
+        }
+      });
+      setDeviceStates(newStatuses);
+      
+    } catch (error) {
+      console.error('Error in master toggle:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const statusValues = Object.values(deviceStates);
+  const allOn = deviceStatesInitialized && statusValues.length > 0 && statusValues.every(status => status === true);
+  const someOn = deviceStatesInitialized && statusValues.some(status => status === true);
+  
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-gray-500">All</span>
+      <button
+        onClick={toggleAllDevices}
+        disabled={loading || !deviceStatesInitialized}
+        className={`
+          relative inline-flex h-5 w-9 items-center rounded-full transition-colors
+          ${loading || !deviceStatesInitialized
+            ? 'bg-gray-300 cursor-not-allowed' 
+            : allOn
+            ? 'bg-green-600' 
+            : someOn
+            ? 'bg-yellow-500'
+            : 'bg-gray-200'
+          }
+        `}
+        title={loading ? 'Loading...' : !deviceStatesInitialized ? 'Checking device status...' : allOn ? 'Turn all OFF' : 'Turn all ON'}
+      >
+        <span
+          className={`
+            inline-block h-3 w-3 transform rounded-full bg-white transition-transform
+            ${allOn ? 'translate-x-5' : 'translate-x-1'}
+          `}
+        />
+      </button>
+    </div>
+  );
+}
+
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'calendar' | 'status' | 'settings'>('calendar');
+  const [activeTab, setActiveTab] = useState<'calendar' | 'status' | 'settings'>(() => {
+    if (typeof window !== 'undefined') {
+      const savedTab = localStorage.getItem('activeTab');
+      if (savedTab && ['calendar', 'status', 'settings'].includes(savedTab)) {
+        return savedTab as 'calendar' | 'status' | 'settings';
+      }
+    }
+    return 'calendar';
+  });
   const [notification, setNotification] = useState<string | null>(null);
   const [editingSituation, setEditingSituation] = useState<SituationType | null>(null);
   const [selectedDevice, setSelectedDevice] = useState(DEVICES[0]); // For settings page
   const [todayInfo, setTodayInfo] = useState(scheduler.getTodayScheduleInfo());
+  const [deviceStates, setDeviceStates] = useState<Record<string, boolean>>({});
+  const [deviceStatesInitialized, setDeviceStatesInitialized] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [customSchedules, setCustomSchedules] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -133,10 +255,8 @@ export default function Home() {
   // Update scheduler with custom schedules on load
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
-      // For now, use the first device's schedules as default for the scheduler
-      // TODO: Update scheduler to handle per-device schedules
-      const firstDeviceSchedules = customSchedules[DEVICES[0].id] || DEFAULT_SCHEDULES;
-      scheduler.updateCustomSchedules(firstDeviceSchedules);
+      // Update scheduler with all device schedules
+      scheduler.updateCustomSchedules(customSchedules);
       setTodayInfo(scheduler.getTodayScheduleInfo());
     }
   }, [customSchedules]);
@@ -149,6 +269,46 @@ export default function Home() {
 
     return () => clearInterval(interval);
   }, []);
+
+  // Save active tab to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('activeTab', activeTab);
+    }
+  }, [activeTab]);
+
+  // Initialize device states on page load
+  useEffect(() => {
+    const initializeDeviceStates = async () => {
+      const initialStates: Record<string, boolean> = {};
+      
+      for (const device of DEVICES) {
+        try {
+          const status = await tuyaAPI.getDeviceStatus(device.id);
+          
+          // Extract the switch status from the response
+          let isOn = false;
+          if (status.result && status.result.status) {
+            // Look for switch_1 in the status array
+            const switchStatus = status.result.status.find((item: any) => item.code === 'switch_1');
+            isOn = switchStatus ? Boolean(switchStatus.value) : false;
+          }
+          
+          initialStates[device.id] = isOn;
+        } catch (error) {
+          console.error(`Error checking ${device.name} status on init:`, error);
+          initialStates[device.id] = false;
+        }
+      }
+      
+      setDeviceStates(initialStates);
+      setDeviceStatesInitialized(true);
+    };
+
+    if (!deviceStatesInitialized) {
+      initializeDeviceStates();
+    }
+  }, [deviceStatesInitialized]);
 
   const handleDateSelect = (date: Date, situation: SituationType) => {
     const dateString = date.toLocaleDateString();
@@ -191,9 +351,8 @@ export default function Home() {
       localStorage.setItem('per-device-schedules', JSON.stringify(newSchedules));
     }
     
-    // Update the scheduler to use new custom schedules for this device
-    const deviceSchedules = newSchedules[selectedDevice.id];
-    scheduler.updateCustomSchedules(deviceSchedules);
+    // Update the scheduler to use new custom schedules for all devices
+    scheduler.updateCustomSchedules(newSchedules);
     setTodayInfo(scheduler.getTodayScheduleInfo());
     
     setEditingSituation(null);
@@ -317,10 +476,23 @@ export default function Home() {
             
             {/* Device Controls */}
             <div className="bg-white rounded-lg shadow p-6 max-w-md mx-auto">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Device Controls</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800">Device Controls</h3>
+                <MasterToggle 
+                  deviceStates={deviceStates} 
+                  setDeviceStates={setDeviceStates}
+                  deviceStatesInitialized={deviceStatesInitialized}
+                />
+              </div>
               <div className="space-y-3">
                 {DEVICES.map((device) => (
-                  <DeviceControl key={device.id} device={device} />
+                  <DeviceControl 
+                    key={device.id} 
+                    device={device} 
+                    deviceStates={deviceStates}
+                    setDeviceStates={setDeviceStates}
+                    deviceStatesInitialized={deviceStatesInitialized}
+                  />
                 ))}
               </div>
             </div>
