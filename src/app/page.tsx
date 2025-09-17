@@ -97,7 +97,7 @@ export default function Home() {
                 <Laptop size={24} className="text-blue-600" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">Smart Plug Scheduler</h1>
+                <h1 className="text-xl font-bold text-gray-900">Smart Situation Scheduler</h1>
                 <p className="text-sm text-gray-600">Situation-based automation</p>
               </div>
             </div>
