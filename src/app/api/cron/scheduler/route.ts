@@ -125,11 +125,13 @@ async function executeScheduleCheck() {
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify cron authorization (Vercel adds this header)
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.includes('Bearer')) {
-      // For development, allow requests without auth
-      console.log('⚠️ No auth header - allowing for development');
+    // Optional token auth: if CRON_SECRET is set, require matching token
+    const requiredToken = process.env.CRON_SECRET;
+    if (requiredToken) {
+      const provided = request.headers.get('x-cron-token');
+      if (!provided || provided !== requiredToken) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      }
     }
     
     const result = await executeScheduleCheck();
@@ -151,6 +153,14 @@ export async function GET(request: NextRequest) {
 // Also handle POST for manual triggers during development
 export async function POST(request: NextRequest) {
   try {
+    // Optional token auth: if CRON_SECRET is set, require matching token
+    const requiredToken = process.env.CRON_SECRET;
+    if (requiredToken) {
+      const provided = request.headers.get('x-cron-token');
+      if (!provided || provided !== requiredToken) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      }
+    }
     const result = await executeScheduleCheck();
     
     return NextResponse.json({
