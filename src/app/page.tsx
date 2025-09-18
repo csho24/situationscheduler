@@ -413,10 +413,14 @@ export default function Home() {
     
     // Update the server scheduler to use new custom schedules for all devices
     await serverScheduler.updateCustomSchedules(newSchedules);
+    
+    // Force sync to server to ensure data is persisted
+    await serverScheduler.syncToServer();
+    
     setTodayInfo(serverScheduler.getTodayScheduleInfo());
     
     setEditingSituation(null);
-    setNotification(`${selectedDevice.name} ${situation} schedule updated!`);
+    setNotification(`${selectedDevice.name} ${situation} schedule updated and synced to server!`);
     setTimeout(() => setNotification(null), 3000);
   };
 

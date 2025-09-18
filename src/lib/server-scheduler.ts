@@ -112,7 +112,7 @@ export class ServerScheduler {
   }
 
   // Sync local state to server
-  private async syncToServer(): Promise<void> {
+  async syncToServer(): Promise<void> {
     try {
       const scheduleData = Array.from(this.schedules.entries()).reduce((acc, [key, value]) => {
         acc[key] = value;
