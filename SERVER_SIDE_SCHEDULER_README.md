@@ -89,7 +89,7 @@ This README documents ALL the server-side scheduling attempts: what we tried, wh
 
 ### Key Files Created/Modified
 - `vercel.json` - Production cron configuration
-- `src/app/api/cron/scheduler/route.ts` - Server cron endpoint
+- `src/app/api/scheduler/route.ts` - Server scheduler endpoint
 - `src/app/api/schedules/route.ts` - Schedule data management API
 - `src/lib/persistent-storage.ts` - File-based storage system
 - `src/lib/tuya-api.ts` - Fixed with absolute base URL logic
@@ -119,20 +119,20 @@ const url = endpoint.startsWith('?')
    - Add: `NEXT_PUBLIC_BASE_URL = https://your-project-name.vercel.app`
    - Select: Production (and Preview if desired)
 6. **Redeploy**: Trigger a new deployment to pick up the env var
-7. **Test Cron**: Visit `https://your-project-name.vercel.app/api/cron/scheduler`
+7. **Test Scheduler**: Visit `https://your-project-name.vercel.app/api/scheduler`
 8. **Test End-to-End**: Set a schedule and wait for execution
 
 ### Important Notes
 - **No custom domain required** - `*.vercel.app` URLs work perfectly
 - **Environment variable is critical** - Without it, server API calls will fail in production
-- **Cron runs automatically** - Vercel will execute `/api/cron/scheduler` every minute once deployed
+- **Scheduler runs via external pinger** - External service will call `/api/scheduler` every minute once deployed
 
 ## Local Development Notes
 
 ### Current Behavior
 - **Cron doesn't run locally** - Only in production
 - **Server base URL**: Automatically uses `http://localhost:3001`
-- **Testing**: Can manually trigger via `curl http://localhost:3001/api/cron/scheduler`
+- **Testing**: Can manually trigger via `curl http://localhost:3001/api/scheduler`
 
 ### Future Improvements (Optional)
 - Add Node script that pings cron every minute locally

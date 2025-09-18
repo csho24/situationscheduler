@@ -48,7 +48,7 @@ async function executeSchedulerCheck() {
   try {
     console.log(`🔍 LOCAL SCHEDULER: Executing check at ${new Date().toLocaleTimeString()}`);
     
-    const response = await fetch('/api/cron/scheduler', {
+      const response = await fetch('/api/scheduler', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -207,7 +207,7 @@ export class ServerScheduler {
   // Manual trigger of schedule check (for testing)
   async executeScheduleCheck(): Promise<any> {
     try {
-      const response = await fetch('/api/cron/scheduler', {
+      const response = await fetch('/api/scheduler', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
