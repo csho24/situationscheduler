@@ -314,10 +314,13 @@ export default function Home() {
                 console.log(JSON.parse(actualSchedules));
               }
               
-              // COPY LOCALHOST SCHEDULES TO DEPLOYED VERSION
+              // COPY ACTUAL LOCALHOST SCHEDULES TO DEPLOYED VERSION
               const customSchedules = {
                 "a3e31a88528a6efc15yf4o": {
-                  "work": [{"time":"21:00","action":"on"},{"time":"22:00","action":"off"}],
+                  "work": [
+                    {"time":"22:45","action":"off"},
+                    {"time":"23:20","action":"off"}
+                  ],
                   "rest": [
                     {"time":"20:00","action":"off"},
                     {"time":"21:19","action":"off"},
@@ -326,7 +329,10 @@ export default function Home() {
                   ]
                 },
                 "a34b0f81d957d06e4aojr1": {
-                  "work": [{"time":"21:00","action":"on"},{"time":"22:00","action":"off"}],
+                  "work": [
+                    {"time":"05:45","action":"on"},
+                    {"time":"06:15","action":"off"}
+                  ],
                   "rest": [
                     {"time":"05:45","action":"off"},
                     {"time":"06:15","action":"off"},
@@ -343,7 +349,12 @@ export default function Home() {
                   ]
                 },
                 "a3240659645e83dcfdtng7": {
-                  "work": [{"time":"21:00","action":"on"},{"time":"22:00","action":"off"}],
+                  "work": [
+                    {"time":"00:20","action":"off"},
+                    {"time":"05:45","action":"on"},
+                    {"time":"07:55","action":"off"},
+                    {"time":"19:00","action":"on"}
+                  ],
                   "rest": [
                     {"time":"06:00","action":"on"},
                     {"time":"09:30","action":"off"},
