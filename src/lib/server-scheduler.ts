@@ -41,8 +41,8 @@ export class ServerScheduler {
   constructor() {
     console.log(`🏗️ Creating ServerScheduler - syncing with server state`);
     this.loadFromLocalStorage();
-    // Force immediate sync to ensure server has the data
-    this.syncToServer();
+    // Load from server and sync local data
+    this.loadFromServer();
   }
 
   // Load existing data from localStorage for migration
@@ -80,6 +80,35 @@ export class ServerScheduler {
     DEVICES.forEach(device => {
       this.customSchedules[device.id] = { ...DEFAULT_SCHEDULES };
     });
+  }
+
+  // Load data from server
+  private async loadFromServer(): Promise<void> {
+    try {
+      const response = await fetch('/api/schedules');
+      const data = await response.json();
+      
+      if (data.success) {
+        // Load calendar schedules from server
+        if (data.schedules) {
+          this.schedules = new Map(Object.entries(data.schedules));
+          console.log(`📅 Loaded ${this.schedules.size} calendar schedules from server`);
+        }
+        
+        // Load device schedules from server
+        if (data.deviceSchedules) {
+          this.customSchedules = data.deviceSchedules;
+          console.log(`📋 Loaded device schedules for ${Object.keys(this.customSchedules).length} devices from server`);
+        }
+        
+        // Sync any local changes to server
+        this.syncToServer();
+      }
+    } catch (error) {
+      console.error('❌ Failed to load from server:', error);
+      // Fallback to syncing local data to server
+      this.syncToServer();
+    }
   }
 
   // Sync local state to server
