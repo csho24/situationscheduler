@@ -4,13 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, Settings, Laptop, Edit, Plus, Lightbulb, Usb, Power } from 'lucide-react';
 import CalendarComponent from '@/components/Calendar';
 import ScheduleEditor from '@/components/ScheduleEditor';
-import dynamic from 'next/dynamic';
+// import dynamic from 'next/dynamic';
 import { tuyaAPI } from '@/lib/tuya-api';
 
-const DeviceStatus = dynamic(() => import('@/components/DeviceStatus'), {
-  ssr: false,
-  loading: () => <div className="text-center p-8">Loading device status...</div>
-});
+// const DeviceStatus = dynamic(() => import('@/components/DeviceStatus'), {
+//   ssr: false,
+//   loading: () => <div className="text-center p-8">Loading device status...</div>
+// });
 import { serverScheduler, type SituationType, DEFAULT_SCHEDULES, type ScheduleEntry } from '@/lib/server-scheduler';
 import { startLocalScheduler, stopLocalScheduler } from '@/lib/local-scheduler';
 
@@ -30,15 +30,7 @@ function DeviceControl({ device, deviceStates, setDeviceStates, deviceStatesInit
   const [mounted, setMounted] = useState(false);
   const isOn = deviceStates[device.id] ?? false;
 
-  useEffect(() => {
-    setMounted(true);
-    // Only check status if the main initialization hasn't happened yet
-    if (!deviceStatesInitialized) {
-      checkStatus();
-    }
-  }, [deviceStatesInitialized]);
-
-  const checkStatus = async () => {
+  const checkStatus = React.useCallback(async () => {
     if (!mounted) return;
     setLoading(true);
     try {
@@ -58,7 +50,15 @@ function DeviceControl({ device, deviceStates, setDeviceStates, deviceStatesInit
     } finally {
       setLoading(false);
     }
-  };
+  }, [device.id, device.name, mounted, setDeviceStates]);
+
+  useEffect(() => {
+    setMounted(true);
+    // Only check status if the main initialization hasn't happened yet
+    if (!deviceStatesInitialized) {
+      checkStatus();
+    }
+  }, [deviceStatesInitialized, checkStatus]);
 
   const toggleDevice = async () => {
     if (loading) return;

@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { type ScheduleEntry, type SituationType, type DaySchedule, type ManualOverride } from '@/lib/persistent-storage';
+import { type ScheduleEntry, type SituationType, type DaySchedule } from '@/lib/persistent-storage';
 
 // Simple in-memory cache for serverless functions
-let scheduleCache: {
+const scheduleCache: {
   schedules: Record<string, DaySchedule>;
   deviceSchedules: Record<string, Record<SituationType, ScheduleEntry[]>>;
-  manualOverrides: Record<string, any>;
+  manualOverrides: Record<string, { deviceId: string; until: number; setAt: number }>;
 } = {
   schedules: {},
   deviceSchedules: {},
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
 }
 
 // Clear all manual overrides (utility endpoint)
-export async function DELETE(request: NextRequest) {
+export async function DELETE() {
   try {
     scheduleCache.manualOverrides = {};
     console.log(`🧹 SERVER: Cleared all manual overrides`);

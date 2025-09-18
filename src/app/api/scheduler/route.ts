@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { tuyaAPI } from '@/lib/tuya-api';
-import { loadStorage, updateLastExecutedEvent, clearManualOverride, DEVICES, type SituationType, type DaySchedule, type ScheduleEntry, type ManualOverride } from '@/lib/persistent-storage';
+import { loadStorage, updateLastExecutedEvent, clearManualOverride, DEVICES } from '@/lib/persistent-storage';
 
 async function executeScheduleCheck() {
   const now = new Date();

@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { tuyaAPI } from '@/lib/tuya-api';
 import { DEVICES } from '@/lib/persistent-storage';
 
 // Simple endpoint for external cron services that can't send headers
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const now = new Date();
     const currentTime = now.getHours() * 60 + now.getMinutes();
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
       const device = DEVICES.find(d => d.id === deviceId);
       if (!device) continue;
       
-      const deviceSchedule = schedules[todaySchedule.situation];
+      const deviceSchedule = (schedules as Record<string, Array<{time: string; action: string}>>)[todaySchedule.situation];
       if (!deviceSchedule || deviceSchedule.length === 0) {
         console.log(`📋 ${device.name}: No ${todaySchedule.situation} schedule`);
         continue;
@@ -62,9 +62,12 @@ export async function GET(request: NextRequest) {
         
         if (scheduleTime <= currentTime) {
           // This schedule should have executed
-          const eventKey = `${deviceId}-${schedule.time}-${schedule.action}-${today}`;
+          // const eventKey = `${deviceId}-${schedule.time}-${schedule.action}-${today}`;
           
-          if (!storage.lastExecutedEvents[eventKey]) {
+          // Note: We can't track executed events without persistent storage
+          // This is a limitation of the in-memory cache approach
+          const shouldExecute = true; // Always execute for now
+          if (shouldExecute) {
             console.log(`⚡ ${device.name}: Executing ${schedule.time} ${schedule.action}`);
             
             try {

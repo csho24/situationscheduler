@@ -67,12 +67,12 @@ export class TuyaAPI {
     return true;
   }
 
-  async turnOn(deviceId: string, _isManual: boolean = false): Promise<boolean> {
+  async turnOn(deviceId: string): Promise<boolean> {
     const result = this.controlDevice(deviceId, 'switch_1', true);
     return result;
   }
 
-  async turnOff(deviceId: string, _isManual: boolean = false): Promise<boolean> {
+  async turnOff(deviceId: string): Promise<boolean> {
     const result = this.controlDevice(deviceId, 'switch_1', false);
     return result;
   }
