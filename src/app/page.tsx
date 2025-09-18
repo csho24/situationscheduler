@@ -299,8 +299,13 @@ export default function Home() {
     // Start local scheduler for development
     startLocalScheduler();
     
-    // Force sync localStorage to server after mount to avoid hydration issues
-    serverScheduler.forceSync();
+              // Force sync localStorage to server after mount to avoid hydration issues
+              serverScheduler.forceSync();
+
+              // DEBUG: Log what's in localStorage
+              console.log('🔍 LOCALSTORAGE DEBUG:');
+              console.log('plug-schedules:', localStorage.getItem('plug-schedules'));
+              console.log('per-device-schedules:', localStorage.getItem('per-device-schedules'));
     
     // Cleanup on unmount
     return () => {

@@ -148,10 +148,22 @@ const url = endpoint.startsWith('?')
 5. **Local dev ≠ production** - Cron, environment, and context all differ
 
 ## Current Status
-✅ **Server-side scheduling is fully functional**  
-✅ **Tuya API calls work from server**  
-✅ **Data persistence across routes**  
-✅ **Production deployment path clear**  
-✅ **Manual override behavior corrected**  
 
-The scheduler now works reliably and will execute events on time in production!
+✅ **Server-side scheduling is working**  
+✅ **External pinger calling /api/scheduler every minute**  
+✅ **Tuya API calls execute reliably**  
+❌ **Custom schedules NOT syncing to deployed version**  
+
+**NEW PROBLEM**: Custom schedules work perfectly on localhost but deployed version shows default/template schedules instead of user's custom ones.
+
+### Attempt 8: Schedule Sync Issue (CURRENT)
+- **Problem**: Localhost shows custom times (19:03, 21:19, 23:30) but deployed version shows default times
+- **What we tried**:
+  1. Added `syncToServer()` in constructor - caused React hydration error #418
+  2. Fixed hydration by moving sync to `forceSync()` after component mount
+  3. Multiple TypeScript/React warning fixes (unnecessary)
+  4. 6+ failed deployments trying different sync approaches
+- **Result**: Still not working - deployed version unchanged after multiple attempts
+- **Status**: INVESTIGATING - localStorage not transferring to server storage
+
+The scheduler works server-side but deployed version still shows wrong schedules.
