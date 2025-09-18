@@ -101,7 +101,8 @@ export class ServerScheduler {
           console.log(`📋 Loaded device schedules for ${Object.keys(this.customSchedules).length} devices from server`);
         }
         
-        // Don't auto-sync - let explicit saves handle this
+        // Sync local data to server to ensure consistency
+        this.syncToServer();
       }
     } catch (error) {
       console.error('❌ Failed to load from server:', error);

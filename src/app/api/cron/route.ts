@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { tuyaAPI } from '@/lib/tuya-api';
-import { loadStorage, updateLastExecutedEvent, DEVICES } from '@/lib/persistent-storage';
+import { DEVICES } from '@/lib/persistent-storage';
 
 // Simple endpoint for external cron services that can't send headers
 export async function GET(request: NextRequest) {
@@ -11,11 +11,22 @@ export async function GET(request: NextRequest) {
     
     console.log(`🔍 CRON SCHEDULE CHECK at ${now.toLocaleTimeString()} (${currentTime} minutes)`);
     
-    // Load fresh data from persistent storage
-    const storage = loadStorage();
+    // Get data from cache
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3001';
+    const response = await fetch(`${baseUrl}/api/schedules`);
+    const data = await response.json();
     
-    // Get today's schedule assignment
-    const todaySchedule = storage.scheduleStorage[today];
+    if (!data.success) {
+      console.log('📋 No schedule data available');
+      return NextResponse.json({
+        success: true,
+        message: 'No schedule data available',
+        result: { date: today, situation: null, executed: [] }
+      });
+    }
+    
+    // Get today's schedule assignment from cache
+    const todaySchedule = data.schedules?.[today];
     if (!todaySchedule) {
       console.log('📋 No schedule for today');
       return NextResponse.json({
@@ -28,7 +39,7 @@ export async function GET(request: NextRequest) {
     console.log(`📋 Today's schedule: ${todaySchedule.situation} day`);
     
     // Get device schedules for today's situation
-    const deviceSchedules = storage.deviceSchedules;
+    const deviceSchedules = data.deviceSchedules || {};
     const executedActions = [];
     
     for (const [deviceId, schedules] of Object.entries(deviceSchedules)) {
@@ -64,7 +75,8 @@ export async function GET(request: NextRequest) {
                 await tuyaAPI.turnOff(deviceId);
               }
               
-              updateLastExecutedEvent(eventKey, Date.now());
+              // Note: We can't update executed events without persistent storage
+              // This is a limitation of the localStorage-only approach
               executedActions.push({
                 deviceId,
                 deviceName: device.name,
