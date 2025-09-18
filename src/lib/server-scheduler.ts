@@ -43,8 +43,6 @@ export class ServerScheduler {
     this.loadFromLocalStorage();
     // Load from server and sync local data
     this.loadFromServer();
-    // Always sync localStorage to server to ensure deployed version gets custom schedules
-    this.syncToServer();
   }
 
   // Load existing data from localStorage for migration
@@ -134,6 +132,13 @@ export class ServerScheduler {
       console.log(`🔄 Synced local state to server`);
     } catch (error) {
       console.error('❌ Failed to sync to server:', error);
+    }
+  }
+
+  // Force sync after component mounts to avoid hydration issues
+  forceSync(): void {
+    if (typeof window !== 'undefined') {
+      setTimeout(() => this.syncToServer(), 100);
     }
   }
 

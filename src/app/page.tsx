@@ -299,6 +299,9 @@ export default function Home() {
     // Start local scheduler for development
     startLocalScheduler();
     
+    // Force sync localStorage to server after mount to avoid hydration issues
+    serverScheduler.forceSync();
+    
     // Cleanup on unmount
     return () => {
       stopLocalScheduler();
