@@ -125,14 +125,14 @@ async function executeScheduleCheck() {
 
 export async function GET(request: NextRequest) {
   try {
-    // Temporarily disable token auth for cron-job.org compatibility
-    // const requiredToken = process.env.CRON_SECRET;
-    // if (requiredToken) {
-    //   const provided = request.headers.get('x-cron-token');
-    //   if (!provided || provided !== requiredToken) {
-    //     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    //   }
-    // }
+    // Token auth restored for security
+    const requiredToken = process.env.CRON_SECRET;
+    if (requiredToken) {
+      const provided = request.headers.get('x-cron-token');
+      if (!provided || provided !== requiredToken) {
+        return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+      }
+    }
     
     const result = await executeScheduleCheck();
     
