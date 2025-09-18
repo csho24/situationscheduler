@@ -310,12 +310,13 @@ export class PlugScheduler {
     const now = new Date();
     const currentTime = now.getHours() * 60 + now.getMinutes();
     
-    // Collect all upcoming events from all devices
+    // Collect all upcoming events from all devices (TODAY + TOMORROW)
     const upcomingEvents: Array<{
       deviceName: string;
       time: string;
       action: 'on' | 'off';
       timeInMinutes: number;
+      dayOffset: number; // 0 = today, 1 = tomorrow
     }> = [];
     
     // Get device names for lookup
@@ -325,7 +326,7 @@ export class PlugScheduler {
       { id: 'a3240659645e83dcfdtng7', name: 'USB Hub' }
     ];
     
-    // Check each device's schedule
+    // Check TODAY's remaining events
     for (const device of DEVICES) {
       const deviceSchedules = this.customSchedules[device.id];
       if (!deviceSchedules || !deviceSchedules[todaySchedule.situation]) continue;
@@ -347,8 +348,40 @@ export class PlugScheduler {
             deviceName: device.name,
             time: entry.time,
             action: entry.action,
-            timeInMinutes: entryTime
+            timeInMinutes: entryTime,
+            dayOffset: 0
           });
+        }
+      }
+    }
+    
+    // If no events today, check TOMORROW's first events
+    if (upcomingEvents.length === 0) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowDateStr = tomorrow.toISOString().split('T')[0];
+      const tomorrowSchedule = this.getSituation(tomorrowDateStr);
+      
+      if (tomorrowSchedule) {
+        for (const device of DEVICES) {
+          const deviceSchedules = this.customSchedules[device.id];
+          if (!deviceSchedules || !deviceSchedules[tomorrowSchedule.situation]) continue;
+          
+          const schedule = deviceSchedules[tomorrowSchedule.situation];
+          if (!schedule || !Array.isArray(schedule)) continue;
+          
+          for (const entry of schedule) {
+            const [hours, minutes] = entry.time.split(':').map(Number);
+            const entryTime = hours * 60 + minutes;
+            
+            upcomingEvents.push({
+              deviceName: device.name,
+              time: entry.time,
+              action: entry.action,
+              timeInMinutes: entryTime,
+              dayOffset: 1
+            });
+          }
         }
       }
     }
@@ -357,16 +390,20 @@ export class PlugScheduler {
       return { situation: todaySchedule.situation, nextAction: null };
     }
     
-    // Sort by time and find the earliest
-    upcomingEvents.sort((a, b) => a.timeInMinutes - b.timeInMinutes);
+    // Sort by day then time
+    upcomingEvents.sort((a, b) => {
+      if (a.dayOffset !== b.dayOffset) return a.dayOffset - b.dayOffset;
+      return a.timeInMinutes - b.timeInMinutes;
+    });
     const earliestTime = upcomingEvents[0].timeInMinutes;
     const eventsAtEarliestTime = upcomingEvents.filter(event => event.timeInMinutes === earliestTime);
     
-    // Format the next action
+    // Format the next action (include day if tomorrow)
+    const dayPrefix = upcomingEvents[0].dayOffset === 1 ? ' (Tomorrow)' : '';
     let nextAction = '';
     if (eventsAtEarliestTime.length === 1) {
       const event = eventsAtEarliestTime[0];
-      nextAction = `${event.deviceName} ${event.action.toUpperCase()} at ${event.time}`;
+      nextAction = `${event.deviceName} ${event.action.toUpperCase()} at ${event.time}${dayPrefix}`;
     } else {
       // Group by action
       const onDevices = eventsAtEarliestTime.filter(e => e.action === 'on').map(e => e.deviceName);
@@ -380,7 +417,7 @@ export class PlugScheduler {
         actionParts.push(`${offDevices.join(' + ')} OFF`);
       }
       
-      nextAction = `${actionParts.join(', ')} at ${eventsAtEarliestTime[0].time}`;
+      nextAction = `${actionParts.join(', ')} at ${eventsAtEarliestTime[0].time}${dayPrefix}`;
     }
     
     return { situation: todaySchedule.situation, nextAction };

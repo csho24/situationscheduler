@@ -1,0 +1,186 @@
+{
+  "scheduleStorage": {
+    "2025-09-14": {
+      "date": "2025-09-14",
+      "situation": "rest",
+      "deviceId": "a34b0f81d957d06e4aojr1"
+    },
+    "2025-09-17": {
+      "date": "2025-09-17",
+      "situation": "rest",
+      "deviceId": "a3e31a88528a6efc15yf4o"
+    },
+    "2025-09-18": {
+      "date": "2025-09-18",
+      "situation": "rest",
+      "deviceId": "a3e31a88528a6efc15yf4o"
+    },
+    "2025-09-19": {
+      "date": "2025-09-19",
+      "situation": "rest",
+      "deviceId": "a3e31a88528a6efc15yf4o"
+    }
+  },
+  "deviceSchedules": {
+    "a3e31a88528a6efc15yf4o": {
+      "work": [
+        {
+          "time": "22:45",
+          "action": "off"
+        },
+        {
+          "time": "23:20",
+          "action": "off"
+        }
+      ],
+      "rest": [
+        {
+          "time": "20:00",
+          "action": "off"
+        },
+        {
+          "time": "21:19",
+          "action": "off"
+        },
+        {
+          "time": "23:00",
+          "action": "off"
+        },
+        {
+          "time": "23:30",
+          "action": "off"
+        }
+      ]
+    },
+    "a34b0f81d957d06e4aojr1": {
+      "work": [
+        {
+          "time": "05:45",
+          "action": "on"
+        },
+        {
+          "time": "06:15",
+          "action": "off"
+        }
+      ],
+      "rest": [
+        {
+          "time": "05:45",
+          "action": "off"
+        },
+        {
+          "time": "06:15",
+          "action": "off"
+        },
+        {
+          "time": "10:00",
+          "action": "on"
+        },
+        {
+          "time": "11:00",
+          "action": "off"
+        },
+        {
+          "time": "14:00",
+          "action": "on"
+        },
+        {
+          "time": "15:00",
+          "action": "off"
+        },
+        {
+          "time": "17:00",
+          "action": "on"
+        },
+        {
+          "time": "19:03",
+          "action": "on"
+        },
+        {
+          "time": "20:00",
+          "action": "on"
+        },
+        {
+          "time": "21:00",
+          "action": "off"
+        },
+        {
+          "time": "22:00",
+          "action": "on"
+        },
+        {
+          "time": "23:00",
+          "action": "off"
+        }
+      ]
+    },
+    "a3240659645e83dcfdtng7": {
+      "work": [
+        {
+          "time": "00:20",
+          "action": "off"
+        },
+        {
+          "time": "05:45",
+          "action": "on"
+        },
+        {
+          "time": "07:55",
+          "action": "off"
+        },
+        {
+          "time": "19:00",
+          "action": "on"
+        }
+      ],
+      "rest": [
+        {
+          "time": "06:00",
+          "action": "on"
+        },
+        {
+          "time": "09:30",
+          "action": "off"
+        },
+        {
+          "time": "14:15",
+          "action": "on"
+        },
+        {
+          "time": "15:00",
+          "action": "off"
+        },
+        {
+          "time": "18:30",
+          "action": "on"
+        },
+        {
+          "time": "20:30",
+          "action": "off"
+        }
+      ]
+    }
+  },
+  "manualOverrides": {
+    "a34b0f81d957d06e4aojr1": {
+      "deviceId": "a34b0f81d957d06e4aojr1",
+      "until": 1758197765721,
+      "setAt": 1758194165721
+    },
+    "a3240659645e83dcfdtng7": {
+      "deviceId": "a3240659645e83dcfdtng7",
+      "until": 1758197770615,
+      "setAt": 1758194170615
+    },
+    "a3e31a88528a6efc15yf4o": {
+      "deviceId": "a3e31a88528a6efc15yf4o",
+      "until": 1758205172876,
+      "setAt": 1758201572876
+    }
+  },
+  "lastExecutedEvents": {
+    "a34b0f81d957d06e4aojr1-19:12-on-2025-09-18": 1758193928121,
+    "a3e31a88528a6efc15yf4o-19:56-off-2025-09-18": 1758196562276,
+    "a3e31a88528a6efc15yf4o-21:19-off-2025-09-18": 1758201559739
+  }
+}

@@ -11,7 +11,8 @@ const DeviceStatus = dynamic(() => import('@/components/DeviceStatus'), {
   ssr: false,
   loading: () => <div className="text-center p-8">Loading device status...</div>
 });
-import { scheduler, type SituationType, DEFAULT_SCHEDULES, type ScheduleEntry } from '@/lib/scheduler';
+import { serverScheduler, type SituationType, DEFAULT_SCHEDULES, type ScheduleEntry } from '@/lib/server-scheduler';
+import { startLocalScheduler, stopLocalScheduler } from '@/lib/local-scheduler';
 
 const DEVICES = [
   { id: 'a3e31a88528a6efc15yf4o', name: 'Lights', app: 'Smart Life', icon: Lightbulb },
@@ -70,6 +71,10 @@ function DeviceControl({ device, deviceStates, setDeviceStates, deviceStatesInit
         await tuyaAPI.turnOn(device.id);
         setDeviceStates(prev => ({ ...prev, [device.id]: true }));
       }
+      
+      // Set manual override for 60 minutes
+      await serverScheduler.setManualOverride(device.id, 60);
+      
     } catch (error) {
       console.error('Error toggling device:', error);
     } finally {
@@ -151,6 +156,10 @@ function MasterToggle({ deviceStates, setDeviceStates, deviceStatesInitialized }
           } else {
             await tuyaAPI.turnOff(device.id);
           }
+          
+          // Set manual override for 60 minutes for each device
+          await serverScheduler.setManualOverride(device.id, 60);
+          
           return { deviceId: device.id, success: true, state: targetState };
         } catch (error) {
           console.error(`Error toggling ${device.name}:`, error);
@@ -224,40 +233,18 @@ export default function Home() {
   const [notification, setNotification] = useState<string | null>(null);
   const [editingSituation, setEditingSituation] = useState<SituationType | null>(null);
   const [selectedDevice, setSelectedDevice] = useState(DEVICES[0]); // For settings page
-  const [todayInfo, setTodayInfo] = useState(scheduler.getTodayScheduleInfo());
+  const [todayInfo, setTodayInfo] = useState(serverScheduler.getTodayScheduleInfo());
   const [deviceStates, setDeviceStates] = useState<Record<string, boolean>>({});
   const [deviceStatesInitialized, setDeviceStatesInitialized] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [customSchedules, setCustomSchedules] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('per-device-schedules');
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch {
-          // Create default schedules for each device
-          const defaultPerDevice = {};
-          DEVICES.forEach(device => {
-            defaultPerDevice[device.id] = DEFAULT_SCHEDULES;
-          });
-          return defaultPerDevice;
-        }
-      }
-    }
-    // Create default schedules for each device
-    const defaultPerDevice = {};
-    DEVICES.forEach(device => {
-      defaultPerDevice[device.id] = DEFAULT_SCHEDULES;
-    });
-    return defaultPerDevice;
-  });
+  const [customSchedules, setCustomSchedules] = useState(() => serverScheduler.getCustomSchedules());
 
   // Update scheduler with custom schedules on load
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
       // Update scheduler with all device schedules
-      scheduler.updateCustomSchedules(customSchedules);
-      setTodayInfo(scheduler.getTodayScheduleInfo());
+      serverScheduler.updateCustomSchedules(customSchedules);
+      setTodayInfo(serverScheduler.getTodayScheduleInfo());
     }
   }, [customSchedules]);
 
@@ -277,7 +264,7 @@ export default function Home() {
     }
   }, [activeTab]);
 
-  // Initialize device states on page load
+  // Initialize device states and local scheduler on page load
   useEffect(() => {
     const initializeDeviceStates = async () => {
       const initialStates: Record<string, boolean> = {};
@@ -308,6 +295,14 @@ export default function Home() {
     if (!deviceStatesInitialized) {
       initializeDeviceStates();
     }
+    
+    // Start local scheduler for development
+    startLocalScheduler();
+    
+    // Cleanup on unmount
+    return () => {
+      stopLocalScheduler();
+    };
   }, [deviceStatesInitialized]);
 
   const handleDateSelect = (date: Date, situation: SituationType) => {
@@ -318,25 +313,25 @@ export default function Home() {
 
   const executeToday = async () => {
     try {
-      await scheduler.executeToday();
-      setNotification('Today\'s schedule executed successfully!');
+      await serverScheduler.executeScheduleCheck();
+      setNotification('Schedule check triggered successfully!');
       setTimeout(() => setNotification(null), 3000);
     } catch {
-      setNotification('Failed to execute today\'s schedule');
+      setNotification('Failed to trigger schedule check');
       setTimeout(() => setNotification(null), 3000);
     }
   };
 
-  const scheduleToday = (situation: SituationType) => {
+  const scheduleToday = async (situation: SituationType) => {
     const today = new Date();
     const dateString = today.toISOString().split('T')[0];
-    scheduler.setSituation(dateString, situation, DEVICES[0].id); // Default to lights device
-    setTodayInfo(scheduler.getTodayScheduleInfo());
-    setNotification(`Today scheduled as ${situation} day - auto-execution active!`);
+    await serverScheduler.setSituation(dateString, situation);
+    setTodayInfo(serverScheduler.getTodayScheduleInfo());
+    setNotification(`Today scheduled as ${situation} day - server scheduling active!`);
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const handleSaveSchedule = (situation: SituationType, schedule: ScheduleEntry[]) => {
+  const handleSaveSchedule = async (situation: SituationType, schedule: ScheduleEntry[]) => {
     const newSchedules = {
       ...customSchedules,
       [selectedDevice.id]: {
@@ -346,14 +341,9 @@ export default function Home() {
     };
     setCustomSchedules(newSchedules);
     
-    // Save to localStorage
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('per-device-schedules', JSON.stringify(newSchedules));
-    }
-    
-    // Update the scheduler to use new custom schedules for all devices
-    scheduler.updateCustomSchedules(newSchedules);
-    setTodayInfo(scheduler.getTodayScheduleInfo());
+    // Update the server scheduler to use new custom schedules for all devices
+    await serverScheduler.updateCustomSchedules(newSchedules);
+    setTodayInfo(serverScheduler.getTodayScheduleInfo());
     
     setEditingSituation(null);
     setNotification(`${selectedDevice.name} ${situation} schedule updated!`);
@@ -547,7 +537,7 @@ export default function Home() {
                     
                     // Check if work schedule is active today (regardless of device)
                     const today = new Date().toISOString().split('T')[0];
-                    const todaySchedule = scheduler.getSituation(today);
+                    const todaySchedule = serverScheduler.getSituation(today);
                     const isActiveToday = todaySchedule?.situation === 'work';
                     
                     // Find the most recent schedule entry that should be active (including overnight)
@@ -624,7 +614,7 @@ export default function Home() {
                     
                     // Check if rest schedule is active today (regardless of device)
                     const today = new Date().toISOString().split('T')[0];
-                    const todaySchedule = scheduler.getSituation(today);
+                    const todaySchedule = serverScheduler.getSituation(today);
                     const isActiveToday = todaySchedule?.situation === 'rest';
                     
                     // Find the most recent schedule entry that should be active (including overnight)
@@ -686,10 +676,19 @@ export default function Home() {
                     setNotification('Custom routines coming soon! For now, edit existing schedules.');
                     setTimeout(() => setNotification(null), 3000);
                   }}
-                  className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-700 hover:text-gray-900 hover:border-gray-400 transition-colors"
+                  className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-700 hover:text-gray-900 hover:border-gray-400 transition-colors mb-4"
                 >
                   <Plus size={20} />
                   Add Custom Routine
+                </button>
+                
+                {/* Test Server Scheduler Button */}
+                <button
+                  onClick={executeToday}
+                  className="w-full flex items-center justify-center gap-2 p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Power size={16} />
+                  Test Server Scheduler
                 </button>
               </div>
 

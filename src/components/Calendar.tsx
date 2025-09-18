@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths } from 'date-fns';
 import { ChevronLeft, ChevronRight, BriefcaseIcon, Coffee, Lightbulb, Laptop, Usb } from 'lucide-react';
-import { scheduler, type SituationType } from '@/lib/scheduler';
+import { serverScheduler, type SituationType } from '@/lib/server-scheduler';
 
 const DEVICES = [
   { id: 'a3e31a88528a6efc15yf4o', name: 'Lights', icon: Lightbulb, app: 'Smart Life' },
@@ -20,12 +20,12 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showSituationModal, setShowSituationModal] = useState(false);
   const [selectedDevice, setSelectedDevice] = useState(DEVICES[0]); // Default to lights
-  const [schedules, setSchedules] = useState(scheduler.getAllSchedules());
+  const [schedules, setSchedules] = useState(serverScheduler.getAllSchedules());
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
-    setSchedules(scheduler.getAllSchedules());
+    setSchedules(serverScheduler.getAllSchedules());
   }, []);
 
   const monthStart = startOfMonth(currentDate);
@@ -42,11 +42,11 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
     }
   };
 
-  const handleSituationSelect = (situation: SituationType) => {
+  const handleSituationSelect = async (situation: SituationType) => {
     if (selectedDate) {
       const dateString = format(selectedDate, 'yyyy-MM-dd');
-      scheduler.setSituation(dateString, situation, selectedDevice.id);
-      setSchedules(scheduler.getAllSchedules());
+      await serverScheduler.setSituation(dateString, situation);
+      setSchedules(serverScheduler.getAllSchedules());
       onDateSelect?.(selectedDate, situation);
       setShowSituationModal(false);
       setSelectedDevice(DEVICES[0]); // Reset to default

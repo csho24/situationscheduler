@@ -16,7 +16,14 @@ export class TuyaAPI {
     endpoint: string,
     body?: unknown
   ): Promise<TuyaResponse<T>> {
-    const url = `/api/tuya${endpoint}`;
+    // Use absolute base when running on the server so internal fetches resolve correctly
+    const base = typeof window === 'undefined'
+      ? (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3001')
+      : '';
+    const sanitizedBase = base.replace(/\/$/, '');
+    const url = endpoint.startsWith('?')
+      ? `${sanitizedBase}/api/tuya${endpoint}`
+      : `${sanitizedBase}/api/tuya/${endpoint}`;
     
     const response = await fetch(url, {
       method,
