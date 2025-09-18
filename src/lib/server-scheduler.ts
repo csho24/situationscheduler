@@ -43,6 +43,8 @@ export class ServerScheduler {
     this.loadFromLocalStorage();
     // Load from server and sync local data
     this.loadFromServer();
+    // Always sync localStorage to server to ensure deployed version gets custom schedules
+    this.syncToServer();
   }
 
   // Load existing data from localStorage for migration
