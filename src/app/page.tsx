@@ -307,6 +307,13 @@ export default function Home() {
               console.log('plug-schedules:', localStorage.getItem('plug-schedules'));
               console.log('per-device-schedules:', localStorage.getItem('per-device-schedules'));
               
+              // GET ACTUAL LOCALHOST SCHEDULES
+              const actualSchedules = localStorage.getItem('per-device-schedules');
+              if (actualSchedules) {
+                console.log('📋 ACTUAL LOCALHOST SCHEDULES:');
+                console.log(JSON.parse(actualSchedules));
+              }
+              
               // COPY LOCALHOST SCHEDULES TO DEPLOYED VERSION
               const customSchedules = {
                 "a3e31a88528a6efc15yf4o": {
