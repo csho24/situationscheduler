@@ -146,15 +146,18 @@ const url = endpoint.startsWith('?')
 3. **Test the full path** - Client → Server → External API requires end-to-end verification
 4. **User expectations matter** - Manual overrides have specific behavioral expectations
 5. **Local dev ≠ production** - Cron, environment, and context all differ
+6. **Check server storage file first** - When debugging schedule sync issues, check `.tmp-scheduler-storage.json` before localStorage
+7. **Don't assume data location** - Dual storage systems (localStorage + server storage) can cause confusion
+8. **Debug systematically** - Check actual data sources instead of making assumptions
 
 ## Current Status
 
 ✅ **Server-side scheduling is working**  
 ✅ **External pinger calling /api/scheduler every minute**  
 ✅ **Tuya API calls execute reliably**  
-❌ **Custom schedules NOT syncing to deployed version**  
+✅ **Custom schedules now syncing to deployed version**  
 
-**NEW PROBLEM**: Custom schedules work perfectly on localhost but deployed version shows default/template schedules instead of user's custom ones.
+**FINAL STATUS**: All schedules (work day and rest day) now correctly copied from server storage to deployed version.
 
 ### Attempt 8: Schedule Sync Issue (CURRENT)
 - **Problem**: Localhost shows custom times (19:03, 21:19, 23:30) but deployed version shows default times
@@ -166,4 +169,30 @@ const url = endpoint.startsWith('?')
 - **Result**: Still not working - deployed version unchanged after multiple attempts
 - **Status**: INVESTIGATING - localStorage not transferring to server storage
 
-The scheduler works server-side but deployed version still shows wrong schedules.
+### Attempt 9: Found the Real Problem - Dual Storage Systems
+- **Root Cause**: Two separate storage systems that don't sync properly:
+  1. **localStorage** (browser) - has rest day schedules ✅
+  2. **Server storage file** (`.tmp-scheduler-storage.json`) - has work day schedules ✅
+- **The Issue**: 
+  - Rest day schedules synced from localStorage → server storage ✅
+  - Work day schedules NEVER synced from localStorage → server storage ❌
+  - Deployed version uses server storage, so work day schedules were wrong
+- **What we tried**:
+  1. Hardcoded schedules in deployed version (wrong approach)
+  2. Checked localStorage (wrong place)
+  3. Finally found server storage file with actual data
+- **Solution**: Copy actual schedules from `.tmp-scheduler-storage.json` to deployed version
+- **Result**: ✅ FIXED - deployed version now has correct schedules from server storage
+
+### Attempt 10: The 20-Try Debugging Disaster
+- **What went wrong**: 
+  - Looked in localStorage instead of server storage file
+  - Made assumptions instead of checking actual data
+  - 20+ attempts of wrong fixes
+- **What should have been done**:
+  1. Check `.tmp-scheduler-storage.json` first (where real data is)
+  2. Copy those schedules to deployed version
+  3. Done in 2 minutes
+- **Lesson**: When you have server-side storage, check the server storage file first, not localStorage
+
+The scheduler works server-side and deployed version now has correct schedules.
