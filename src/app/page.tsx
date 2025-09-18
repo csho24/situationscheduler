@@ -46,8 +46,8 @@ function DeviceControl({ device, deviceStates, setDeviceStates, deviceStatesInit
       
       // Extract the switch status from the response
       let isOn = false;
-      if (status.result && status.result.status) {
-        const switchStatus = status.result.status.find((item: any) => item.code === 'switch_1');
+      if (status.result && (status.result as { status?: Array<{ code: string; value: boolean }> }).status) {
+        const switchStatus = (status.result as { status: Array<{ code: string; value: boolean }> }).status.find((item: { code: string; value: boolean }) => item.code === 'switch_1');
         isOn = switchStatus ? Boolean(switchStatus.value) : false;
       }
       
@@ -275,9 +275,9 @@ export default function Home() {
           
           // Extract the switch status from the response
           let isOn = false;
-          if (status.result && status.result.status) {
+          if (status.result && (status.result as { status?: Array<{ code: string; value: boolean }> }).status) {
             // Look for switch_1 in the status array
-            const switchStatus = status.result.status.find((item: any) => item.code === 'switch_1');
+            const switchStatus = (status.result as { status: Array<{ code: string; value: boolean }> }).status.find((item: { code: string; value: boolean }) => item.code === 'switch_1');
             isOn = switchStatus ? Boolean(switchStatus.value) : false;
           }
           

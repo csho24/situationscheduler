@@ -80,7 +80,7 @@ async function executeScheduleCheck() {
       try {
         // Get current device state to avoid unnecessary commands
         const deviceStatus = await tuyaAPI.getDeviceStatus(device.id);
-        const currentState = deviceStatus.result?.status?.find((s: any) => s.code === 'switch_1')?.value;
+        const currentState = (deviceStatus.result as { status?: Array<{ code: string; value: boolean }> })?.status?.find((s: { code: string; value: boolean }) => s.code === 'switch_1')?.value;
         const targetState = currentAction === 'on';
         
         if (currentState === targetState) {
@@ -150,7 +150,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Also handle POST for manual triggers during development
+
 export async function POST(request: NextRequest) {
   try {
     // Optional token auth: if CRON_SECRET is set, require matching token

@@ -1,7 +1,7 @@
 // Server-side scheduler client for frontend components
 // This replaces the client-side scheduler with server communication
 
-import { tuyaAPI } from './tuya-api';
+// import { tuyaAPI } from './tuya-api';
 
 export type SituationType = 'work' | 'rest';
 
@@ -205,7 +205,7 @@ export class ServerScheduler {
   }
 
   // Manual trigger of schedule check (for testing)
-  async executeScheduleCheck(): Promise<any> {
+  async executeScheduleCheck(): Promise<unknown> {
     try {
       const response = await fetch('/api/scheduler', {
         method: 'POST',

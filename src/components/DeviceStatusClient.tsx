@@ -36,12 +36,12 @@ function DeviceStatusClient() {
       const response = await tuyaAPI.getDeviceStatus(currentDevice.id);
       
       // Handle the full device response format
-      if (response.result && response.result.status) {
-        const switchStatus = response.result.status.find(s => s.code === 'switch_1');
+      if (response.result && (response.result as { status?: Array<{ code: string; value: boolean }> }).status) {
+        const switchStatus = (response.result as { status: Array<{ code: string; value: boolean }> }).status.find(s => s.code === 'switch_1');
         
         if (switchStatus) {
           setIsOn(switchStatus.value);
-          setIsOnline(response.result.online);
+          setIsOnline((response.result as { online?: boolean }).online ?? false);
         } else {
           setIsOnline(false);
         }

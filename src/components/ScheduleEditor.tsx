@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { Plus, Trash2, Clock, Save } from 'lucide-react';
-import { DEFAULT_SCHEDULES, type SituationType, type ScheduleEntry } from '@/lib/scheduler';
+// import { DEFAULT_SCHEDULES, type SituationType, type ScheduleEntry } from '@/lib/scheduler';
+import { type SituationType, type ScheduleEntry } from '@/lib/scheduler';
 
 interface ScheduleEditorProps {
   situation: SituationType;

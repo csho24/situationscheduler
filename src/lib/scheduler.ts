@@ -39,6 +39,8 @@ export class PlugScheduler {
   private lastScheduleCheck: number = 0;
   private manualOverrideUntil: number = 0; // Timestamp until which manual control is active
   private schedulerInterval: NodeJS.Timeout | null = null;
+  private lastSyncTime: number = 0;
+  private instanceId: string = Math.random().toString(36).substr(2, 9);
 
   constructor() {
     console.log(`🏗️ Creating new PlugScheduler instance with state-based scheduling`);
@@ -187,7 +189,7 @@ export class PlugScheduler {
         // Get current device state to avoid unnecessary commands
         try {
           const deviceStatus = await tuyaAPI.getDeviceStatus(device.id);
-          const currentState = deviceStatus.result?.status?.find(s => s.code === 'switch_1')?.value;
+          const currentState = (deviceStatus.result as { status?: Array<{ code: string; value: boolean }> })?.status?.find(s => s.code === 'switch_1')?.value;
           const targetState = currentAction === 'on';
           
           if (currentState === targetState) {
@@ -230,13 +232,13 @@ export class PlugScheduler {
     
     console.log(`🔍 DEBUG: Syncing device ${deviceId} for ${situation} situation`);
     console.log(`🔍 DEBUG: Current time: ${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')} (${currentTimeMinutes} minutes)`);
-    console.log(`🔍 DEBUG: Schedule entries:`, schedule.map(e => `${e.time} ${e.action}`));
+    console.log(`🔍 DEBUG: Schedule entries:`, Object.values(schedule).flat().map(e => `${e.time} ${e.action}`));
     
     // Find the most recent schedule entry that should have executed today
     let mostRecentEntry = null;
     let mostRecentTime = -1;
     
-    for (const entry of schedule) {
+    for (const entry of Object.values(schedule).flat()) {
       const [hours, minutes] = entry.time.split(':').map(Number);
       const entryTime = hours * 60 + minutes;
       
@@ -423,15 +425,15 @@ export class PlugScheduler {
     return { situation: todaySchedule.situation, nextAction };
   }
 
-  async getCloudTimers(deviceId: string, situation: SituationType): Promise<any[]> {
+  async getCloudTimers(deviceId: string, situation: SituationType): Promise<unknown[]> {
     try {
       const response = await tuyaAPI.queryTimers(deviceId, situation);
-      if (response.success && response.result && response.result.groups) {
+      if ((response as { success?: boolean; result?: { groups?: unknown[] } }).success && (response as { result?: { groups?: unknown[] } }).result && (response as { result: { groups: unknown[] } }).result.groups) {
         // Flatten all timers from all groups
         const allTimers = [];
-        for (const group of response.result.groups) {
-          if (group.timers) {
-            allTimers.push(...group.timers);
+        for (const group of (response as { result: { groups: unknown[] } }).result.groups) {
+          if ((group as { timers?: unknown[] }).timers) {
+            allTimers.push(...(group as { timers: unknown[] }).timers);
           }
         }
         return allTimers;
@@ -443,7 +445,7 @@ export class PlugScheduler {
     }
   }
 
-  async getTodayCloudScheduleInfo(): Promise<{ situation: SituationType | null; nextAction: string | null; cloudTimers: any[] }> {
+  async getTodayCloudScheduleInfo(): Promise<{ situation: SituationType | null; nextAction: string | null; cloudTimers: unknown[] }> {
     const today = new Date().toISOString().split('T')[0];
     const todaySchedule = this.getSituation(today);
     
@@ -460,14 +462,16 @@ export class PlugScheduler {
       
       let nextAction = null;
       for (const timer of cloudTimers) {
-        if (timer.status === 1 && timer.time) { // Active timer
-          const [hours, minutes] = timer.time.split(':').map(Number);
+        const timerObj = timer as { status?: number; time?: string; loops?: string };
+        if (timerObj.status === 1 && timerObj.time) { // Active timer
+          const [hours, minutes] = timerObj.time.split(':').map(Number);
           const timerTime = hours * 60 + minutes;
           
           if (timerTime > currentTime) {
             // Determine action from functions array
-            const action = timer.functions && timer.functions.length > 0 && timer.functions[0].dpValue ? 'ON' : 'OFF';
-            nextAction = `${action} at ${timer.time}`;
+            const timerWithFunctions = timer as { functions?: Array<{ dpValue?: boolean }> };
+            const action = timerWithFunctions.functions && timerWithFunctions.functions.length > 0 && timerWithFunctions.functions[0].dpValue ? 'ON' : 'OFF';
+            nextAction = `${action} at ${timerObj.time}`;
             break;
           }
         }
@@ -476,7 +480,7 @@ export class PlugScheduler {
       return { 
         situation: todaySchedule.situation, 
         nextAction, 
-        cloudTimers: cloudTimers.filter(t => t.status === 1) // Only active timers
+        cloudTimers: cloudTimers.filter(t => (t as { status?: number }).status === 1) // Only active timers
       };
     } catch (error) {
       console.error('Failed to get cloud timer info:', error);

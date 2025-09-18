@@ -30,22 +30,22 @@ interface StorageData {
 }
 
 // Default schedules for new devices
-export const DEFAULT_SCHEDULES: Record<SituationType, ScheduleEntry[]> = {
-  work: [
-    { time: '21:00', action: 'on' },  // 9 PM
-    { time: '22:00', action: 'off' }  // 10 PM
-  ],
-  rest: [
-    { time: '10:00', action: 'on' },  // 10 AM
-    { time: '11:00', action: 'off' }, // 11 AM
-    { time: '14:00', action: 'on' },  // 2 PM
-    { time: '15:00', action: 'off' }, // 3 PM
-    { time: '17:00', action: 'on' },  // 5 PM
-    { time: '18:00', action: 'off' }, // 6 PM
-    { time: '21:00', action: 'on' },  // 9 PM
-    { time: '22:00', action: 'off' }  // 10 PM
-  ]
-};
+// export const DEFAULT_SCHEDULES: Record<SituationType, ScheduleEntry[]> = {
+//   work: [
+//     { time: '21:00', action: 'on' },  // 9 PM
+//     { time: '22:00', action: 'off' }  // 10 PM
+//   ],
+//   rest: [
+//     { time: '10:00', action: 'on' },  // 10 AM
+//     { time: '11:00', action: 'off' }, // 11 AM
+//     { time: '14:00', action: 'on' },  // 2 PM
+//     { time: '15:00', action: 'off' }, // 3 PM
+//     { time: '17:00', action: 'on' },  // 5 PM
+//     { time: '18:00', action: 'off' }, // 6 PM
+//     { time: '21:00', action: 'on' },  // 9 PM
+//     { time: '22:00', action: 'off' }  // 10 PM
+//   ]
+// };
 
 // Device configuration
 export const DEVICES = [
@@ -69,7 +69,22 @@ const defaultData: StorageData = {
 function initializeDefaultDeviceSchedules(data: StorageData): StorageData {
   if (Object.keys(data.deviceSchedules).length === 0) {
     DEVICES.forEach(device => {
-      data.deviceSchedules[device.id] = { ...DEFAULT_SCHEDULES };
+      data.deviceSchedules[device.id] = {
+        work: [
+          { time: '21:00', action: 'on' },
+          { time: '22:00', action: 'off' }
+        ],
+        rest: [
+          { time: '10:00', action: 'on' },
+          { time: '11:00', action: 'off' },
+          { time: '14:00', action: 'on' },
+          { time: '15:00', action: 'off' },
+          { time: '17:00', action: 'on' },
+          { time: '18:00', action: 'off' },
+          { time: '21:00', action: 'on' },
+          { time: '22:00', action: 'off' }
+        ]
+      };
     });
     console.log('🔧 Initialized default device schedules');
   }

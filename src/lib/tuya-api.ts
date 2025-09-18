@@ -5,10 +5,10 @@ interface TuyaResponse<T = unknown> {
   msg?: string;
 }
 
-interface DeviceStatus {
-  code: string;
-  value: boolean;
-}
+// interface DeviceStatus {
+//   code: string;
+//   value: boolean;
+// }
 
 export class TuyaAPI {
   private async makeRequest<T>(
@@ -67,12 +67,12 @@ export class TuyaAPI {
     return true;
   }
 
-  async turnOn(deviceId: string, isManual: boolean = false): Promise<boolean> {
+  async turnOn(deviceId: string, _isManual: boolean = false): Promise<boolean> {
     const result = this.controlDevice(deviceId, 'switch_1', true);
     return result;
   }
 
-  async turnOff(deviceId: string, isManual: boolean = false): Promise<boolean> {
+  async turnOff(deviceId: string, _isManual: boolean = false): Promise<boolean> {
     const result = this.controlDevice(deviceId, 'switch_1', false);
     return result;
   }
@@ -84,7 +84,7 @@ export class TuyaAPI {
     loops?: string;
     category?: string;
     aliasName?: string;
-  }): Promise<any> {
+  }): Promise<unknown> {
     const body = { 
       deviceId, 
       action: 'timer.add',
@@ -95,12 +95,12 @@ export class TuyaAPI {
     return response;
   }
 
-  async queryTimers(deviceId: string, category: string = 'schedule'): Promise<any> {
+  async queryTimers(deviceId: string, category: string = 'schedule'): Promise<unknown> {
     const response = await this.makeRequest('GET', `?deviceId=${deviceId}&action=timer.list&category=${category}`);
     return response;
   }
 
-  async deleteTimer(deviceId: string, timerId: string): Promise<any> {
+  async deleteTimer(deviceId: string, timerId: string): Promise<unknown> {
     const body = { 
       deviceId, 
       action: 'timer.delete',
@@ -113,11 +113,12 @@ export class TuyaAPI {
   async deleteAllTimers(deviceId: string, category: string = 'schedule'): Promise<void> {
     try {
       const timersResponse = await this.queryTimers(deviceId, category);
-      if (timersResponse.success && timersResponse.result && timersResponse.result.groups) {
-        for (const group of timersResponse.result.groups) {
-          if (group.timers) {
-            for (const timer of group.timers) {
-              await this.deleteTimer(deviceId, timer.timer_id.toString());
+      const response = timersResponse as { success?: boolean; result?: { groups?: Array<{ timers?: unknown[] }> } };
+      if (response.success && response.result && response.result.groups) {
+        for (const group of response.result.groups) {
+          if ((group as { timers?: unknown[] }).timers) {
+            for (const timer of (group as { timers: unknown[] }).timers) {
+              await this.deleteTimer(deviceId, (timer as { timer_id?: number }).timer_id?.toString() || '');
             }
           }
         }
