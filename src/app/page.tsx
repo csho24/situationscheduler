@@ -306,6 +306,51 @@ export default function Home() {
               console.log('🔍 LOCALSTORAGE DEBUG:');
               console.log('plug-schedules:', localStorage.getItem('plug-schedules'));
               console.log('per-device-schedules:', localStorage.getItem('per-device-schedules'));
+              
+              // COPY LOCALHOST SCHEDULES TO DEPLOYED VERSION
+              // Replace the deployed version's default schedules with your localhost custom ones
+              const customSchedules = {
+                "a3e31a88528a6efc15yf4o": {
+                  "work": [{"time":"21:00","action":"on"},{"time":"22:00","action":"off"}],
+                  "rest": [
+                    {"time":"20:00","action":"off"},
+                    {"time":"21:19","action":"off"},
+                    {"time":"23:00","action":"off"},
+                    {"time":"23:30","action":"off"}
+                  ]
+                },
+                "a34b0f81d957d06e4aojr1": {
+                  "work": [{"time":"21:00","action":"on"},{"time":"22:00","action":"off"}],
+                  "rest": [
+                    {"time":"05:45","action":"off"},
+                    {"time":"06:15","action":"off"},
+                    {"time":"10:00","action":"on"},
+                    {"time":"11:00","action":"off"},
+                    {"time":"14:00","action":"on"},
+                    {"time":"15:00","action":"off"},
+                    {"time":"17:00","action":"on"},
+                    {"time":"19:03","action":"on"},
+                    {"time":"20:00","action":"on"},
+                    {"time":"21:00","action":"off"},
+                    {"time":"22:00","action":"on"},
+                    {"time":"23:00","action":"off"}
+                  ]
+                },
+                "a3240659645e83dcfdtng7": {
+                  "work": [{"time":"21:00","action":"on"},{"time":"22:00","action":"off"}],
+                  "rest": [
+                    {"time":"06:00","action":"on"},
+                    {"time":"09:30","action":"off"},
+                    {"time":"14:15","action":"on"},
+                    {"time":"15:00","action":"off"},
+                    {"time":"18:30","action":"on"},
+                    {"time":"20:30","action":"off"}
+                  ]
+                }
+              };
+              
+              console.log('🔄 OVERRIDING DEPLOYED SCHEDULES WITH LOCALHOST CUSTOM ONES');
+              localStorage.setItem('per-device-schedules', JSON.stringify(customSchedules));
     
     // Cleanup on unmount
     return () => {
