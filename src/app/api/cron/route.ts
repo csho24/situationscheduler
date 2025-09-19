@@ -22,11 +22,23 @@ const FALLBACK_SCHEDULES: Record<string, Array<{time: string; action: string}>> 
 // Simple endpoint for external cron services that can't send headers
 export async function GET() {
   try {
-    const now = new Date();
-    const currentTime = now.getHours() * 60 + now.getMinutes();
-    const today = now.toISOString().split('T')[0];
+    // Force time calculations in Asia/Singapore to avoid UTC mismatch on Vercel
+    const tz = 'Asia/Singapore';
+    const fmt = new Intl.DateTimeFormat('en-GB', {
+      timeZone: tz,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const parts = fmt.formatToParts(new Date());
+    const hour = Number(parts.find(p => p.type === 'hour')?.value ?? '0');
+    const minute = Number(parts.find(p => p.type === 'minute')?.value ?? '0');
+    const currentTime = hour * 60 + minute;
+    // Compute "today" in target timezone
+    const dateFmt = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
+    const today = dateFmt.format(new Date()); // YYYY-MM-DD
     
-    console.log(`🔍 CRON SCHEDULE CHECK at ${now.toLocaleTimeString()} (${currentTime} minutes)`);
+    console.log(`🔍 CRON SCHEDULE CHECK (${tz}) at ${hour.toString().padStart(2,'0')}:${minute.toString().padStart(2,'0')} (${currentTime} minutes)`);
     
     // Get today's calendar assignment from Supabase
     const { data: calendarData, error: calendarError } = await supabase
