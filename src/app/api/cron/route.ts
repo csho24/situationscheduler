@@ -3,6 +3,24 @@ import { tuyaAPI } from '@/lib/tuya-api';
 import { supabase } from '@/lib/supabase';
 import { DEVICES } from '@/lib/persistent-storage';
 
+// Fallback: if Supabase fails, use hardcoded schedules
+const FALLBACK_SCHEDULES = {
+  'a34b0f81d957d06e4aojr1': { // Laptop
+    rest: [
+      { time: '10:00', action: 'on' },
+      { time: '11:00', action: 'off' },
+      { time: '14:00', action: 'on' },
+      { time: '15:00', action: 'off' },
+      { time: '17:00', action: 'on' },
+      { time: '19:03', action: 'on' },
+      { time: '20:00', action: 'on' },
+      { time: '21:00', action: 'off' },
+      { time: '22:00', action: 'on' },
+      { time: '23:00', action: 'off' }
+    ]
+  }
+};
+
 // Simple endpoint for external cron services that can't send headers
 export async function GET() {
   try {
@@ -19,36 +37,46 @@ export async function GET() {
       .eq('date', today)
       .single();
     
-    if (calendarError || !calendarData) {
-      console.log('📋 No schedule for today');
-      return NextResponse.json({
-        success: true,
-        message: 'No schedule for today',
-        result: { date: today, situation: null, executed: [] }
-      });
+    let situation = 'rest'; // Default fallback
+    
+    if (calendarError) {
+      console.error('❌ Supabase calendar error:', calendarError);
+      console.log('🔄 Using fallback: assuming rest day');
+      situation = 'rest';
+    } else if (!calendarData) {
+      console.log('📋 No schedule for today, using fallback: rest day');
+      situation = 'rest';
+    } else {
+      situation = calendarData.situation;
     }
     
-    console.log(`📋 Today's schedule: ${calendarData.situation} day`);
+    console.log(`📋 Today's schedule: ${situation} day`);
     
     // Get device schedules for today's situation from Supabase
     const { data: deviceSchedules, error: deviceError } = await supabase
       .from('device_schedules')
       .select('*')
-      .eq('situation', calendarData.situation);
+      .eq('situation', situation);
     
-    if (deviceError) throw deviceError;
+    let schedulesByDevice: Record<string, Array<{time: string; action: string}>> = {};
     
-    // Group schedules by device
-    const schedulesByDevice: Record<string, Array<{time: string; action: string}>> = {};
-    deviceSchedules?.forEach(schedule => {
-      if (!schedulesByDevice[schedule.device_id]) {
-        schedulesByDevice[schedule.device_id] = [];
-      }
-      schedulesByDevice[schedule.device_id].push({
-        time: schedule.time,
-        action: schedule.action
+    if (deviceError) {
+      console.error('❌ Supabase device schedules error:', deviceError);
+      console.log('🔄 Using fallback schedules');
+      // Use fallback schedules
+      schedulesByDevice = FALLBACK_SCHEDULES;
+    } else {
+      // Group schedules by device from Supabase
+      deviceSchedules?.forEach(schedule => {
+        if (!schedulesByDevice[schedule.device_id]) {
+          schedulesByDevice[schedule.device_id] = [];
+        }
+        schedulesByDevice[schedule.device_id].push({
+          time: schedule.time,
+          action: schedule.action
+        });
       });
-    });
+    }
     
     const executedActions = [];
     
@@ -123,7 +151,7 @@ export async function GET() {
       message: 'Cron executed successfully',
       result: {
         date: today,
-        situation: calendarData.situation,
+        situation: situation,
         executed: executedActions
       }
     });
