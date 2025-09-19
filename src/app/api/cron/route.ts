@@ -4,21 +4,19 @@ import { supabase } from '@/lib/supabase';
 import { DEVICES } from '@/lib/persistent-storage';
 
 // Fallback: if Supabase fails, use hardcoded schedules
-const FALLBACK_SCHEDULES = {
-  'a34b0f81d957d06e4aojr1': { // Laptop
-    rest: [
-      { time: '10:00', action: 'on' },
-      { time: '11:00', action: 'off' },
-      { time: '14:00', action: 'on' },
-      { time: '15:00', action: 'off' },
-      { time: '17:00', action: 'on' },
-      { time: '19:03', action: 'on' },
-      { time: '20:00', action: 'on' },
-      { time: '21:00', action: 'off' },
-      { time: '22:00', action: 'on' },
-      { time: '23:00', action: 'off' }
-    ]
-  }
+const FALLBACK_SCHEDULES: Record<string, Array<{time: string; action: string}>> = {
+  'a34b0f81d957d06e4aojr1': [ // Laptop
+    { time: '10:00', action: 'on' },
+    { time: '11:00', action: 'off' },
+    { time: '14:00', action: 'on' },
+    { time: '15:00', action: 'off' },
+    { time: '17:00', action: 'on' },
+    { time: '19:03', action: 'on' },
+    { time: '20:00', action: 'on' },
+    { time: '21:00', action: 'off' },
+    { time: '22:00', action: 'on' },
+    { time: '23:00', action: 'off' }
+  ]
 };
 
 // Simple endpoint for external cron services that can't send headers
