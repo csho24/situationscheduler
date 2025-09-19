@@ -152,12 +152,12 @@ const url = endpoint.startsWith('?')
 
 ## Current Status
 
-✅ **Server-side scheduling is working**  
-✅ **External pinger calling /api/scheduler every minute**  
-✅ **Tuya API calls execute reliably**  
-✅ **Custom schedules now syncing to deployed version**  
+❌ **Server-side scheduling is NOT working**  
+❌ **Deployed version fails to execute device controls**  
+❌ **Only localhost version works**  
+❌ **Supabase integration failed to solve core issues**  
 
-**FINAL STATUS**: All schedules (work day and rest day) now correctly copied from server storage to deployed version.
+**FINAL STATUS**: After 20+ attempts and Supabase integration, server-side scheduling still doesn't work reliably on deployed version.
 
 ### Attempt 8: Schedule Sync Issue (CURRENT)
 - **Problem**: Localhost shows custom times (19:03, 21:19, 23:30) but deployed version shows default times
@@ -227,6 +227,96 @@ The scheduler works server-side and deployed version now has correct schedules.
 2. **Or use client-side scheduling** with browser notifications/background sync
 3. **Or use different hosting** that supports persistent file storage
 4. **Current approach is fundamentally flawed** - serverless can't maintain state
+
+### Attempt 13: Supabase Integration (LATEST FAILURE)
+- **Problem**: After Supabase integration, deployed version still doesn't execute device controls
+- **What we tried**:
+  1. **CHANGE**: Added Supabase database for persistent storage
+  2. **CHANGE**: Created database schema with calendar_assignments, device_schedules, manual_overrides, execution_log tables
+  3. **CHANGE**: Updated schedules API to use Supabase instead of in-memory cache
+  4. **CHANGE**: Updated cron job to read from Supabase database
+  5. **CHANGE**: Added fallback schedules if Supabase fails
+  6. **CHANGE**: Fixed TypeScript build errors
+- **What failed**: 
+  - Build errors prevented deployment initially
+  - Even after fixing build, deployed version still doesn't work
+  - Localhost version works perfectly (11 actions executed)
+  - Deployed version fails to execute device controls
+- **LEARNING**: Supabase integration didn't solve the core deployment issues
+- **POTENTIAL FIX**: The problem might be with Vercel deployment environment, not database storage
+
+### Attempt 14: Build Error Fix (PARTIAL SUCCESS)
+- **Problem**: TypeScript error in cron route preventing deployment
+- **What we tried**:
+  1. **CHANGE**: Fixed fallback schedules type definition
+  2. **CHANGE**: Build now compiles successfully
+- **What worked**: Build errors resolved, deployment possible
+- **What failed**: Deployed version still doesn't execute device controls
+- **LEARNING**: Build errors were blocking deployment, but fixing them didn't solve execution issues
+
+## Why Server-Side Scheduling Keeps Failing
+
+### Core Issues Identified:
+1. **Serverless Limitations**: Vercel functions are stateless, can't maintain state between calls
+2. **Deployment Environment**: Something in Vercel deployment environment prevents device control execution
+3. **Database vs Cache**: Even with Supabase database, deployed version doesn't work
+4. **Localhost vs Deployed**: Localhost works perfectly, deployed version fails
+
+### What Actually Works:
+- ✅ **Localhost version**: Executes 11 device controls successfully
+- ✅ **Tuya API calls**: Work perfectly on localhost
+- ✅ **Schedule persistence**: Supabase database works
+- ✅ **Cron job logic**: Correctly identifies and executes schedules
+
+### What Doesn't Work:
+- ❌ **Deployed version**: Fails to execute device controls
+- ❌ **Vercel environment**: Something blocks device control execution
+- ❌ **Serverless functions**: Can't maintain reliable state
+
+## Possible Ways Forward
+
+### Option 1: Different Hosting Platform
+- **Use Railway, Render, or DigitalOcean** instead of Vercel
+- **Why**: These platforms support persistent storage and stateful applications
+- **Pros**: Real server environment, persistent storage, reliable execution
+- **Cons**: More complex deployment, potential costs
+
+### Option 2: Client-Side Scheduling with Improvements
+- **Revert to localhost approach** but make it more reliable
+- **Use browser notifications** to keep app active
+- **Background sync** to maintain schedules
+- **Pros**: Already works on localhost, simpler architecture
+- **Cons**: Requires browser to be open, less reliable
+
+### Option 3: Hybrid Approach
+- **Client-side scheduling** for reliability
+- **Server-side logging** for tracking
+- **Database storage** for persistence
+- **Pros**: Combines benefits of both approaches
+- **Cons**: More complex architecture
+
+### Option 4: External Cron Service
+- **Use external cron service** (cron-job.org) to ping deployed endpoint
+- **Deployed endpoint** just executes device controls
+- **No complex scheduling logic** on server
+- **Pros**: Simple, reliable, works with serverless
+- **Cons**: Depends on external service
+
+## Recommendation
+
+**The server-side approach is fundamentally flawed for this use case.** After 20+ attempts and Supabase integration, the deployed version still doesn't work reliably.
+
+**Best solution: Use client-side scheduling with improvements:**
+1. **Revert to localhost approach** (which actually works)
+2. **Add browser notifications** to keep app active
+3. **Use Supabase for persistence** (schedule storage)
+4. **Add background sync** for reliability
+
+**This approach works because:**
+- ✅ **Proven to work** (localhost version executes 11 actions successfully)
+- ✅ **No serverless limitations** (runs in browser)
+- ✅ **Reliable execution** (Tuya API calls work perfectly)
+- ✅ **Simple architecture** (no complex server-side logic)
 
 ## Next Steps
 - Either implement proper database storage
