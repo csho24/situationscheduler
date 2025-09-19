@@ -196,3 +196,76 @@ const url = endpoint.startsWith('?')
 - **Lesson**: When you have server-side storage, check the server storage file first, not localStorage
 
 The scheduler works server-side and deployed version now has correct schedules.
+
+### Attempt 11: In-Memory Cache Approach (LATEST FAILURE)
+- **Problem**: File-based storage doesn't persist in Vercel serverless functions
+- **What we tried**: 
+  1. **CHANGE**: Replaced file storage with in-memory cache in `src/app/api/schedules/route.ts`
+  2. **CHANGE**: Updated cron endpoint to read from cache instead of file
+  3. **CHANGE**: Fixed all TypeScript/build errors
+  4. **CHANGE**: Removed file storage dependencies
+- **What failed**: Schedule edits still don't persist after refresh
+- **Root cause**: In-memory cache gets wiped between serverless function invocations
+- **LEARNING**: Serverless functions are stateless - no persistence between calls
+- **POTENTIAL FIX**: Use external database (PostgreSQL, MongoDB) for true persistence
+- **Status**: STILL NOT WORKING - need different approach
+
+### Attempt 12: The Real Problem - Serverless Limitations
+- **Issue**: Vercel serverless functions can't maintain state between invocations
+- **File storage**: Gets wiped between function calls
+- **In-memory cache**: Gets wiped between function calls  
+- **localStorage**: Only exists in browser, not accessible to server
+- **LEARNING**: Serverless = stateless by design - this is a fundamental limitation
+- **POTENTIAL FIX**: 
+  1. Use external database (PostgreSQL, MongoDB, Supabase)
+  2. Use client-side scheduling with browser notifications
+  3. Use different hosting (Railway, Render) that supports persistent storage
+- **Current status**: All approaches fail due to serverless limitations
+
+## What Actually Needs to Happen
+1. **Use external database** (PostgreSQL, MongoDB, etc.) for persistent storage
+2. **Or use client-side scheduling** with browser notifications/background sync
+3. **Or use different hosting** that supports persistent file storage
+4. **Current approach is fundamentally flawed** - serverless can't maintain state
+
+## Next Steps
+- Either implement proper database storage
+- Or revert to client-side scheduling with improvements
+- Or find hosting solution that supports persistent storage
+
+## Every Change Made (with Learning Points)
+
+### File Changes in Attempt 11:
+1. **`src/app/api/schedules/route.ts`**:
+   - **CHANGE**: Added in-memory `scheduleCache` object
+   - **CHANGE**: Modified GET to return cache data instead of file data
+   - **CHANGE**: Modified POST to update cache instead of file
+   - **LEARNING**: In-memory objects don't persist between serverless invocations
+   - **POTENTIAL FIX**: Use external database for true persistence
+
+2. **`src/app/api/cron/route.ts`**:
+   - **CHANGE**: Updated to read from cache via API call instead of file
+   - **CHANGE**: Removed file storage dependencies
+   - **LEARNING**: Serverless functions can't share state between routes
+   - **POTENTIAL FIX**: Use database that all functions can access
+
+3. **`src/lib/server-scheduler.ts`**:
+   - **CHANGE**: Reverted to load from server and sync back
+   - **CHANGE**: Made `syncToServer()` public method
+   - **LEARNING**: Client-server sync is complex with stateless server
+   - **POTENTIAL FIX**: Use database as single source of truth
+
+4. **Build fixes**:
+   - **CHANGE**: Fixed TypeScript errors in cron route
+   - **CHANGE**: Fixed React hook dependencies
+   - **CHANGE**: Removed unused imports
+   - **LEARNING**: Build errors are symptoms, not the root problem
+   - **POTENTIAL FIX**: Address architectural issues first, then fix build
+
+### Key Learning Points:
+- **Serverless = Stateless**: No persistence between function calls
+- **File storage fails**: Gets wiped between invocations
+- **In-memory cache fails**: Gets wiped between invocations
+- **localStorage inaccessible**: Only exists in browser context
+- **Fundamental limitation**: Vercel serverless cannot maintain state
+- **Solution requires**: External database or different architecture

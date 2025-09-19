@@ -1,49 +1,72 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { type ScheduleEntry, type SituationType, type DaySchedule } from '@/lib/persistent-storage';
+import { supabase } from '@/lib/supabase';
 
-// Simple in-memory cache for serverless functions
-const scheduleCache: {
-  schedules: Record<string, DaySchedule>;
-  deviceSchedules: Record<string, Record<SituationType, ScheduleEntry[]>>;
-  manualOverrides: Record<string, { deviceId: string; until: number; setAt: number }>;
-} = {
-  schedules: {},
-  deviceSchedules: {},
-  manualOverrides: {}
-};
-
-// Get all schedule data from cache
+// Get schedule data from Supabase database
 export async function GET(request: NextRequest) {
-  const url = new URL(request.url);
-  const type = url.searchParams.get('type');
-  
   try {
-    if (type === 'calendar') {
-      return NextResponse.json({
-        success: true,
-        schedules: scheduleCache.schedules
+    console.log('📂 SERVER: Fetching schedule data from Supabase');
+    
+    // Get calendar assignments
+    const { data: calendarData, error: calendarError } = await supabase
+      .from('calendar_assignments')
+      .select('*');
+    
+    if (calendarError) throw calendarError;
+    
+    // Get device schedules
+    const { data: deviceData, error: deviceError } = await supabase
+      .from('device_schedules')
+      .select('*');
+    
+    if (deviceError) throw deviceError;
+    
+    // Get manual overrides
+    const { data: overrideData, error: overrideError } = await supabase
+      .from('manual_overrides')
+      .select('*');
+    
+    if (overrideError) throw overrideError;
+    
+    // Transform data to match expected format
+    const schedules: Record<string, { date: string; situation: string }> = {};
+    calendarData?.forEach(assignment => {
+      schedules[assignment.date] = {
+        date: assignment.date,
+        situation: assignment.situation
+      };
+    });
+    
+    const deviceSchedules: Record<string, Record<string, Array<{time: string; action: string}>>> = {};
+    deviceData?.forEach(schedule => {
+      if (!deviceSchedules[schedule.device_id]) {
+        deviceSchedules[schedule.device_id] = { work: [], rest: [] };
+      }
+      deviceSchedules[schedule.device_id][schedule.situation].push({
+        time: schedule.time,
+        action: schedule.action
       });
-    } else if (type === 'devices') {
-      return NextResponse.json({
-        success: true,
-        deviceSchedules: scheduleCache.deviceSchedules
-      });
-    } else if (type === 'overrides') {
-      return NextResponse.json({
-        success: true,
-        manualOverrides: scheduleCache.manualOverrides
-      });
-    } else {
-      // Return all data
-      return NextResponse.json({
-        success: true,
-        schedules: scheduleCache.schedules,
-        deviceSchedules: scheduleCache.deviceSchedules,
-        manualOverrides: scheduleCache.manualOverrides
-      });
-    }
+    });
+    
+    const manualOverrides: Record<string, { deviceId: string; until: number; setAt: number }> = {};
+    overrideData?.forEach(override => {
+      manualOverrides[override.device_id] = {
+        deviceId: override.device_id,
+        until: new Date(override.until_timestamp).getTime(),
+        setAt: new Date(override.set_at).getTime()
+      };
+    });
+    
+    console.log(`📂 SERVER: Loaded ${calendarData?.length || 0} calendar assignments, ${deviceData?.length || 0} device schedules, ${overrideData?.length || 0} overrides`);
+    
+    return NextResponse.json({
+      success: true,
+      schedules,
+      deviceSchedules,
+      manualOverrides
+    });
+    
   } catch (error) {
-    console.error('❌ Error getting schedules:', error);
+    console.error('❌ Error fetching schedules from Supabase:', error);
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'
@@ -51,61 +74,100 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Update schedule data - now updates cache
+// Update schedule data in Supabase database
 export async function POST(request: NextRequest) {
   try {
     const data = await request.json();
     const { type, ...payload } = data;
     
     if (type === 'calendar') {
-      // Update calendar assignments
+      // Update calendar assignment
       if (payload.date && payload.situation) {
-        scheduleCache.schedules[payload.date] = { date: payload.date, situation: payload.situation };
+        const { error } = await supabase
+          .from('calendar_assignments')
+          .upsert({
+            date: payload.date,
+            situation: payload.situation,
+            updated_at: new Date().toISOString()
+          });
+        
+        if (error) throw error;
         console.log(`📅 SERVER: Updated calendar ${payload.date} -> ${payload.situation}`);
-      } else if (payload.schedules) {
-        // Bulk update
-        scheduleCache.schedules = { ...scheduleCache.schedules, ...payload.schedules };
-        console.log(`📅 SERVER: Bulk updated calendar schedules`);
       }
     } else if (type === 'devices') {
       // Update device schedules
       if (payload.deviceSchedules) {
-        scheduleCache.deviceSchedules = { ...scheduleCache.deviceSchedules, ...payload.deviceSchedules };
+        // Clear existing schedules for all devices
+        const { error: deleteError } = await supabase
+          .from('device_schedules')
+          .delete()
+          .neq('id', 0); // Delete all records
+        
+        if (deleteError) throw deleteError;
+        
+        // Insert new schedules
+        const schedulesToInsert = [];
+        for (const [deviceId, deviceSchedules] of Object.entries(payload.deviceSchedules)) {
+          for (const [situation, schedules] of Object.entries(deviceSchedules as Record<string, Array<{time: string; action: string}>>)) {
+            for (const schedule of schedules) {
+              schedulesToInsert.push({
+                device_id: deviceId,
+                situation: situation,
+                time: schedule.time,
+                action: schedule.action
+              });
+            }
+          }
+        }
+        
+        if (schedulesToInsert.length > 0) {
+          const { error: insertError } = await supabase
+            .from('device_schedules')
+            .insert(schedulesToInsert);
+          
+          if (insertError) throw insertError;
+        }
+        
         console.log(`📋 SERVER: Updated device schedules for all devices`);
       }
     } else if (type === 'manual-override') {
       // Set manual override
       const { deviceId, durationMinutes = 60 } = payload;
       if (deviceId) {
-        scheduleCache.manualOverrides[deviceId] = {
-          deviceId,
-          until: Date.now() + (durationMinutes * 60000),
-          setAt: Date.now()
-        };
+        const untilTimestamp = new Date(Date.now() + (durationMinutes * 60000)).toISOString();
+        
+        const { error } = await supabase
+          .from('manual_overrides')
+          .upsert({
+            device_id: deviceId,
+            until_timestamp: untilTimestamp,
+            set_at: new Date().toISOString()
+          });
+        
+        if (error) throw error;
         console.log(`🔧 SERVER: Manual override set for ${deviceId} for ${durationMinutes} minutes`);
       }
     } else if (type === 'clear-override') {
       // Clear manual override
       const { deviceId } = payload;
       if (deviceId) {
-        delete scheduleCache.manualOverrides[deviceId];
+        const { error } = await supabase
+          .from('manual_overrides')
+          .delete()
+          .eq('device_id', deviceId);
+        
+        if (error) throw error;
         console.log(`🔄 SERVER: Cleared manual override for ${deviceId}`);
       }
-    } else if (type === 'sync-from-client') {
-      // Sync all data from client to server
-      if (payload.schedules) scheduleCache.schedules = payload.schedules;
-      if (payload.deviceSchedules) scheduleCache.deviceSchedules = payload.deviceSchedules;
-      if (payload.manualOverrides) scheduleCache.manualOverrides = payload.manualOverrides;
-      console.log(`🔄 SERVER: Synced all data from client`);
     }
     
     return NextResponse.json({
       success: true,
-      message: 'Schedules updated successfully'
+      message: 'Schedules updated successfully in Supabase'
     });
     
   } catch (error) {
-    console.error('❌ Error updating schedules:', error);
+    console.error('❌ Error updating schedules in Supabase:', error);
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'
@@ -113,11 +175,17 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Clear all manual overrides (utility endpoint)
+// Clear all manual overrides
 export async function DELETE() {
   try {
-    scheduleCache.manualOverrides = {};
-    console.log(`🧹 SERVER: Cleared all manual overrides`);
+    const { error } = await supabase
+      .from('manual_overrides')
+      .delete()
+      .neq('id', 0); // Delete all records
+    
+    if (error) throw error;
+    
+    console.log(`🧹 SERVER: Cleared all manual overrides in Supabase`);
     
     return NextResponse.json({
       success: true,

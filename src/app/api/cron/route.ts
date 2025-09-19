@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { tuyaAPI } from '@/lib/tuya-api';
+import { supabase } from '@/lib/supabase';
 import { DEVICES } from '@/lib/persistent-storage';
 
 // Simple endpoint for external cron services that can't send headers
@@ -11,23 +12,14 @@ export async function GET() {
     
     console.log(`🔍 CRON SCHEDULE CHECK at ${now.toLocaleTimeString()} (${currentTime} minutes)`);
     
-    // Get data from cache
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3001';
-    const response = await fetch(`${baseUrl}/api/schedules`);
-    const data = await response.json();
+    // Get today's calendar assignment from Supabase
+    const { data: calendarData, error: calendarError } = await supabase
+      .from('calendar_assignments')
+      .select('*')
+      .eq('date', today)
+      .single();
     
-    if (!data.success) {
-      console.log('📋 No schedule data available');
-      return NextResponse.json({
-        success: true,
-        message: 'No schedule data available',
-        result: { date: today, situation: null, executed: [] }
-      });
-    }
-    
-    // Get today's schedule assignment from cache
-    const todaySchedule = data.schedules?.[today];
-    if (!todaySchedule) {
+    if (calendarError || !calendarData) {
       console.log('📋 No schedule for today');
       return NextResponse.json({
         success: true,
@@ -36,23 +28,35 @@ export async function GET() {
       });
     }
     
-    console.log(`📋 Today's schedule: ${todaySchedule.situation} day`);
+    console.log(`📋 Today's schedule: ${calendarData.situation} day`);
     
-    // Get device schedules for today's situation
-    const deviceSchedules = data.deviceSchedules || {};
+    // Get device schedules for today's situation from Supabase
+    const { data: deviceSchedules, error: deviceError } = await supabase
+      .from('device_schedules')
+      .select('*')
+      .eq('situation', calendarData.situation);
+    
+    if (deviceError) throw deviceError;
+    
+    // Group schedules by device
+    const schedulesByDevice: Record<string, Array<{time: string; action: string}>> = {};
+    deviceSchedules?.forEach(schedule => {
+      if (!schedulesByDevice[schedule.device_id]) {
+        schedulesByDevice[schedule.device_id] = [];
+      }
+      schedulesByDevice[schedule.device_id].push({
+        time: schedule.time,
+        action: schedule.action
+      });
+    });
+    
     const executedActions = [];
     
-    for (const [deviceId, schedules] of Object.entries(deviceSchedules)) {
+    for (const [deviceId, deviceSchedule] of Object.entries(schedulesByDevice)) {
       const device = DEVICES.find(d => d.id === deviceId);
       if (!device) continue;
       
-      const deviceSchedule = (schedules as Record<string, Array<{time: string; action: string}>>)[todaySchedule.situation];
-      if (!deviceSchedule || deviceSchedule.length === 0) {
-        console.log(`📋 ${device.name}: No ${todaySchedule.situation} schedule`);
-        continue;
-      }
-      
-      console.log(`📋 ${device.name} ${todaySchedule.situation} schedule:`, deviceSchedule);
+      console.log(`📋 ${device.name} ${calendarData.situation} schedule:`, deviceSchedule);
       
       for (const schedule of deviceSchedule) {
         const [hours, minutes] = schedule.time.split(':').map(Number);
@@ -61,39 +65,53 @@ export async function GET() {
         console.log(`⏰ ${device.name}: Checking ${schedule.time} (${scheduleTime} min) ${schedule.action} - ${scheduleTime <= currentTime ? 'PAST' : 'FUTURE'}`);
         
         if (scheduleTime <= currentTime) {
-          // This schedule should have executed
-          // const eventKey = `${deviceId}-${schedule.time}-${schedule.action}-${today}`;
+          // This schedule should have executed - EXECUTE IT NOW
+          console.log(`⚡ ${device.name}: Executing ${schedule.time} ${schedule.action}`);
           
-          // Note: We can't track executed events without persistent storage
-          // This is a limitation of the in-memory cache approach
-          const shouldExecute = true; // Always execute for now
-          if (shouldExecute) {
-            console.log(`⚡ ${device.name}: Executing ${schedule.time} ${schedule.action}`);
-            
-            try {
-              // Use the same Tuya API calls as the main scheduler
-              if (schedule.action === 'on') {
-                await tuyaAPI.turnOn(deviceId);
-              } else {
-                await tuyaAPI.turnOff(deviceId);
-              }
-              
-              // Note: We can't update executed events without persistent storage
-              // This is a limitation of the localStorage-only approach
-              executedActions.push({
-                deviceId,
-                deviceName: device.name,
-                time: schedule.time,
-                action: schedule.action
-              });
-              
-              console.log(`✅ ${device.name}: ${schedule.action} executed successfully`);
-            } catch (error) {
-              console.error(`❌ ${device.name}: Failed to ${schedule.action}:`, error);
+          try {
+            // Execute the device control
+            if (schedule.action === 'on') {
+              const result = await tuyaAPI.turnOn(deviceId);
+              console.log(`🔌 ${device.name}: Turn ON result:`, result);
+            } else {
+              const result = await tuyaAPI.turnOff(deviceId);
+              console.log(`🔌 ${device.name}: Turn OFF result:`, result);
             }
-          } else {
-            console.log(`⏭️ ${device.name}: ${schedule.time} ${schedule.action} already executed`);
+            
+            // Log execution to Supabase
+            await supabase
+              .from('execution_log')
+              .insert({
+                device_id: deviceId,
+                action: schedule.action,
+                scheduled_time: schedule.time,
+                success: true
+              });
+            
+            executedActions.push({
+              deviceId,
+              deviceName: device.name,
+              time: schedule.time,
+              action: schedule.action
+            });
+            
+            console.log(`✅ ${device.name}: ${schedule.action} executed successfully`);
+          } catch (error) {
+            console.error(`❌ ${device.name}: Failed to ${schedule.action}:`, error);
+            
+            // Log failed execution to Supabase
+            await supabase
+              .from('execution_log')
+              .insert({
+                device_id: deviceId,
+                action: schedule.action,
+                scheduled_time: schedule.time,
+                success: false,
+                error_message: error instanceof Error ? error.message : 'Unknown error'
+              });
           }
+        } else {
+          console.log(`⏰ ${device.name}: ${schedule.time} ${schedule.action} is in the future`);
         }
       }
     }
@@ -105,7 +123,7 @@ export async function GET() {
       message: 'Cron executed successfully',
       result: {
         date: today,
-        situation: todaySchedule.situation,
+        situation: calendarData.situation,
         executed: executedActions
       }
     });

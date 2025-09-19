@@ -41,8 +41,10 @@ export class ServerScheduler {
   constructor() {
     console.log(`🏗️ Creating ServerScheduler - syncing with server state`);
     this.loadFromLocalStorage();
-    // Load from server and sync local data
-    this.loadFromServer();
+    // Only load from server on client side to avoid SSR issues
+    if (typeof window !== 'undefined') {
+      this.loadFromServer();
+    }
   }
 
   // Load existing data from localStorage for migration
@@ -85,7 +87,9 @@ export class ServerScheduler {
   // Load data from server
   private async loadFromServer(): Promise<void> {
     try {
-      const response = await fetch('/api/schedules');
+      // Use absolute URL for client-side requests
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+      const response = await fetch(`${baseUrl}/api/schedules`);
       const data = await response.json();
       
       if (data.success) {
@@ -119,7 +123,8 @@ export class ServerScheduler {
         return acc;
       }, {} as Record<string, DaySchedule>);
 
-      await fetch('/api/schedules', {
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+      await fetch(`${baseUrl}/api/schedules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -154,7 +159,8 @@ export class ServerScheduler {
 
     // Sync to server
     try {
-      await fetch('/api/schedules', {
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+      await fetch(`${baseUrl}/api/schedules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -188,7 +194,8 @@ export class ServerScheduler {
 
     // Sync to server
     try {
-      await fetch('/api/schedules', {
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+      await fetch(`${baseUrl}/api/schedules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -209,7 +216,8 @@ export class ServerScheduler {
   // Manual device control with server-side override tracking
   async setManualOverride(deviceId: string, durationMinutes: number = 60): Promise<void> {
     try {
-      await fetch('/api/schedules', {
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+      await fetch(`${baseUrl}/api/schedules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -226,7 +234,8 @@ export class ServerScheduler {
 
   async clearManualOverride(deviceId: string): Promise<void> {
     try {
-      await fetch('/api/schedules', {
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+      await fetch(`${baseUrl}/api/schedules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -243,7 +252,8 @@ export class ServerScheduler {
   // Manual trigger of schedule check (for testing)
   async executeScheduleCheck(): Promise<unknown> {
     try {
-      const response = await fetch('/api/scheduler', {
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+      const response = await fetch(`${baseUrl}/api/scheduler`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
