@@ -108,23 +108,16 @@ export async function GET() {
           console.log(`⚡ ${device.name}: Executing ${schedule.time} ${schedule.action}`);
           
           try {
-            // Execute the device control directly via Tuya API
-            const commands = [{ code: 'switch_1', value: schedule.action === 'on' }];
-            const accessToken = await getAccessToken();
-            const timestamp = Date.now().toString();
-            const signature = await generateSignature('POST', `/v1.0/devices/${deviceId}/commands`, timestamp, accessToken, JSON.stringify({ commands }));
-            
-            const response = await fetch(`https://openapi-sg.iotbing.com/v1.0/devices/${deviceId}/commands`, {
+            // Use the same API endpoint as manual controls for consistency
+            const baseUrl = process.env.VERCEL_URL ? 'https://situationscheduler.vercel.app' : 'http://localhost:3001';
+            const response = await fetch(`${baseUrl}/api/tuya`, {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'client_id': 'enywhg3tuc4nkjuc4tfk',
-                'access_token': accessToken,
-                't': timestamp,
-                'sign_method': 'HMAC-SHA256',
-                'sign': signature
-              },
-              body: JSON.stringify({ commands })
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                deviceId,
+                action: 'switch_1',
+                value: schedule.action === 'on'
+              })
             });
             
             if (!response.ok) {

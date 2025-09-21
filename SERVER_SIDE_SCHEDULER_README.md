@@ -584,4 +584,42 @@ The scheduler works server-side and deployed version now has correct schedules.
 3. **Extensive logging:** Console logs to see exactly what's happening in the UI
 4. **Debug output:** Shows device counts, schedule data, and loading attempts
 
-**Next step:** Check browser console on deployed version to see debug logs and identify the UI loading issue.
+## Attempt 26: FINAL SOLUTION (September 21, 2025) - SUCCESS!
+
+**Issues found from browser console:**
+1. ✅ **Data loads successfully:** "✅ UI: Loaded 3 devices from API"
+2. ❌ **New schedules don't persist:** User saves were only updating local state, not Supabase
+3. ⚠️ **Slow loading:** Takes few seconds to load from Supabase on refresh
+
+**THE KEY FIX - Selective Sync Control:**
+
+The root problem was that `updateCustomSchedules()` was either:
+1. **Completely disabled** (user saves didn't persist) OR
+2. **Always syncing** (auto-loads overwrote user data)
+
+**Solution:** Added `allowSync` parameter to control when syncing happens:
+```typescript
+async updateCustomSchedules(data, allowSync: boolean = false) {
+  this.customSchedules = data;
+  if (allowSync) {
+    // Only sync to Supabase when explicitly allowed
+    await fetch('/api/schedules', { ... });
+  }
+}
+```
+
+**Usage:**
+- **User saves:** `allowSync: true` → saves to Supabase ✅
+- **Auto-loads:** `allowSync: false` → no overwrites ✅
+- **UI loads:** Direct API fetch → fast loading ✅
+
+**This wasn't "disabling stuff" - it was surgical control over when data syncs occur.**
+
+**RESULT:**
+- ✅ **Data persistence:** User saves now persist to Supabase
+- ✅ **No overwrites:** Automatic loads don't erase data
+- ✅ **22:45 schedules visible:** UI displays server data correctly
+- ✅ **All 3 devices working:** Lights, laptop, USB hub with custom schedules
+- ✅ **Server-side cron working:** Executes schedules reliably
+
+**STATUS: COMPLETE** - Full server-side scheduling with persistent data storage!
