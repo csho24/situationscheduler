@@ -137,10 +137,21 @@ export async function GET() {
               deviceId,
               deviceName: device.name,
               time: schedule.time,
-              action: schedule.action
+              action: schedule.action,
+              apiResult: result.success ? 'success' : 'failed',
+              apiDetails: result
             });
           } catch (error) {
             console.error(`❌ ${device.name}: Failed to ${schedule.action}:`, error);
+            
+            executedActions.push({
+              deviceId,
+              deviceName: device.name,
+              time: schedule.time,
+              action: schedule.action,
+              apiResult: 'error',
+              apiDetails: { error: error.message }
+            });
           }
         } else {
           console.log(`⏰ ${device.name}: ${schedule.time} ${schedule.action} is in the future`);
