@@ -344,12 +344,41 @@ The scheduler works server-side and deployed version now has correct schedules.
 - Breaking the constructor order that was working
 - Not respecting that localStorage-first approach works
 
+## PROPER ARCHITECTURAL SOLUTIONS
+
+### Option 1: Refine Supabase Usage (Vercel + Supabase)
+**If staying on Vercel:**
+- ✅ **Every function call explicitly reads latest schedules from Supabase at start**
+- ✅ **Commit any updates back immediately to Supabase**
+- ✅ **Avoid caching schedules in memory or localStorage for server logic**
+- ✅ **Proper database transaction handling and error handling**
+- ✅ **Authentication setup needs thorough review**
+
+### Option 2: Container-Based Serverless Platforms
+**Use Google Cloud Run or similar:**
+- ✅ **Containerized apps with serverless scaling**
+- ✅ **Can hold state between requests within container lifetime**
+- ✅ **More control than pure serverless functions**
+- ✅ **Persistent storage and cron capability**
+
+### Option 3: Hybrid Approach (RECOMMENDED)
+**Divide concerns for reliability:**
+- ✅ **Keep UI and user interactions on Vercel/Netlify frontend**
+- ✅ **Move backend scheduling, state, and device control to microservice**
+- ✅ **Backend on stateful platform with persistent storage**
+- ✅ **Reliable cron capability**
+
+### Option 4: Improve Local Development Workflow
+**Test outside serverless constraints:**
+- ✅ **Use local Node.js scripts or local cron replacement**
+- ✅ **Test schedule execution outside serverless constraints**
+- ✅ **Ensure logic correctness before deploying**
+
 ## Next Steps
-- **Option 1**: Deploy to Railway/Render (recommended)
-- **Option 2**: Use external cron service (simple)  
-- **Option 3**: Fix Vercel deployment issues (complex)
-- **Option 4**: Debug the actual client-server sync mechanism (needed)
-- **Option 5**: STOP CHANGING WORKING CODE AND FOCUS ON THE ACTUAL PROBLEM
+- **Option 1**: Refine Supabase usage (if staying on Vercel)
+- **Option 2**: Deploy to Google Cloud Run (container-based)
+- **Option 3**: Hybrid approach (frontend on Vercel, backend elsewhere)
+- **Option 4**: Improve local development workflow
 
 ## Every Change Made (with Learning Points)
 

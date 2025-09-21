@@ -71,11 +71,14 @@ export async function GET() {
     console.log(`🔍 CRON SCHEDULE CHECK (${tz}) at ${hour.toString().padStart(2,'0')}:${minute.toString().padStart(2,'0')} (${currentTime} minutes)`);
     
     // Get today's calendar assignment from Supabase
+    console.log(`🔍 DEBUG: Looking for calendar assignment for date: ${today}`);
     const { data: calendarData, error: calendarError } = await supabase
       .from('calendar_assignments')
       .select('*')
       .eq('date', today)
       .single();
+    
+    console.log(`🔍 DEBUG: Calendar query result:`, { calendarData, calendarError });
     
     let situation = 'rest'; // Default fallback
     
@@ -88,15 +91,23 @@ export async function GET() {
       situation = 'rest';
     } else {
       situation = calendarData.situation;
+      console.log(`📋 Found calendar assignment: ${calendarData.date} -> ${calendarData.situation}`);
     }
     
     console.log(`📋 Today's schedule: ${situation} day`);
     
     // Get device schedules for today's situation from Supabase
+    console.log(`🔍 DEBUG: Looking for device schedules for situation: ${situation}`);
     const { data: deviceSchedules, error: deviceError } = await supabase
       .from('device_schedules')
       .select('*')
       .eq('situation', situation);
+    
+    console.log(`🔍 DEBUG: Device schedules query result:`, { 
+      count: deviceSchedules?.length || 0, 
+      data: deviceSchedules, 
+      error: deviceError 
+    });
     
     let schedulesByDevice: Record<string, Array<{time: string; action: string}>> = {};
     
@@ -116,6 +127,7 @@ export async function GET() {
           action: schedule.action
         });
       });
+      console.log(`🔍 DEBUG: Grouped schedules by device:`, schedulesByDevice);
     }
     
     const executedActions = [];
