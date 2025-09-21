@@ -40,10 +40,12 @@ export class ServerScheduler {
 
   constructor() {
     console.log(`🏗️ Creating ServerScheduler - syncing with server state`);
-    this.loadFromLocalStorage();
     // Only load from server on client side to avoid SSR issues
     if (typeof window !== 'undefined') {
       this.loadFromServer();
+    } else {
+      // On server side, just load from localStorage
+      this.loadFromLocalStorage();
     }
   }
 
@@ -107,11 +109,16 @@ export class ServerScheduler {
         
         // Save server data to localStorage for caching
         this.saveToLocalStorage();
+      } else {
+        // Server failed, fallback to localStorage
+        console.log('📱 Server failed, using localStorage fallback');
+        this.loadFromLocalStorage();
       }
     } catch (error) {
       console.error('❌ Failed to load from server:', error);
-      // Just use local data, don't overwrite server
-      console.log('📱 Using local data as fallback');
+      // Fallback to localStorage
+      console.log('📱 Using localStorage as fallback');
+      this.loadFromLocalStorage();
     }
   }
 
