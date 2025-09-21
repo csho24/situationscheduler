@@ -567,4 +567,21 @@ The scheduler works server-side and deployed version now has correct schedules.
 - ✅ **Data persistent in Supabase:** 30 device schedules stored
 - ✅ **UI should now display server data** after deployment
 
-**STATUS: COMPLETE** - Server-side scheduling fully working with persistent data!
+**STATUS: DEBUGGING UI** - Server data exists but UI not showing it!
+
+## Attempt 25: DEBUG UI Data Loading (September 21, 2025) - FINDING THE UI BUG
+
+**Problem:** Data is 100% in Supabase and cron works, but deployed UI doesn't show schedules
+
+**Verification:**
+- ✅ **API returns 22:45 schedule:** `curl /api/schedules` shows correct data
+- ✅ **Cron finds schedules:** Executed 13 events successfully  
+- ❌ **UI shows empty schedules:** Website doesn't display the data
+
+**Debug changes deployed:**
+1. **Direct API loading:** UI now fetches `/api/schedules` directly instead of waiting for server scheduler
+2. **Retry mechanism:** Multiple attempts to load data with 500ms intervals
+3. **Extensive logging:** Console logs to see exactly what's happening in the UI
+4. **Debug output:** Shows device counts, schedule data, and loading attempts
+
+**Next step:** Check browser console on deployed version to see debug logs and identify the UI loading issue.

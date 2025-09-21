@@ -238,6 +238,7 @@ export default function Home() {
   const [deviceStatesInitialized, setDeviceStatesInitialized] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [customSchedules, setCustomSchedules] = useState(() => serverScheduler.getCustomSchedules());
+  const [isLoadingSchedules, setIsLoadingSchedules] = useState(true);
 
   // Load data directly from API on mount - bypass server scheduler
   React.useEffect(() => {
@@ -252,14 +253,16 @@ export default function Home() {
             console.log(`✅ UI: Loaded ${Object.keys(data.deviceSchedules).length} devices from API`);
             setCustomSchedules(data.deviceSchedules);
             
-            // Also update the server scheduler
-            serverScheduler.updateCustomSchedules(data.deviceSchedules);
+            // Also update the server scheduler (no sync - just load data)
+            serverScheduler.updateCustomSchedules(data.deviceSchedules, false);
             setTodayInfo(serverScheduler.getTodayScheduleInfo());
           } else {
             console.log(`❌ UI: No device schedules in API response`);
           }
+          setIsLoadingSchedules(false);
         } catch (error) {
           console.error('❌ UI: Failed to load from API:', error);
+          setIsLoadingSchedules(false);
         }
       };
       
@@ -267,10 +270,10 @@ export default function Home() {
     }
   }, []);
 
-  // Update scheduler with custom schedules when state changes
+  // Update scheduler with custom schedules when state changes (no sync)
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
-      serverScheduler.updateCustomSchedules(customSchedules);
+      serverScheduler.updateCustomSchedules(customSchedules, false);
       setTodayInfo(serverScheduler.getTodayScheduleInfo());
     }
   }, [customSchedules]);
@@ -438,8 +441,8 @@ export default function Home() {
     };
     setCustomSchedules(newSchedules);
     
-    // Update the server scheduler to use new custom schedules for all devices
-    await serverScheduler.updateCustomSchedules(newSchedules);
+    // Update the server scheduler and save to server (user explicit save)
+    await serverScheduler.updateCustomSchedules(newSchedules, true);
     
     // Force sync to server to ensure data is persisted
     // No sync - read-only from Supabase

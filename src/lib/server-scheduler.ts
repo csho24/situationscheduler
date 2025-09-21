@@ -115,12 +115,28 @@ export class ServerScheduler {
     return [...this.schedules.values()];
   }
 
-  // Update device schedules (local state only - no sync to prevent overwrites)
-  async updateCustomSchedules(allDeviceSchedules: Record<string, Record<SituationType, ScheduleEntry[]>>): Promise<void> {
+  // Update device schedules with optional sync control
+  async updateCustomSchedules(allDeviceSchedules: Record<string, Record<SituationType, ScheduleEntry[]>>, allowSync: boolean = false): Promise<void> {
     this.customSchedules = allDeviceSchedules;
-    console.log(`📋 Updated local state for ${Object.keys(allDeviceSchedules).length} devices (no server sync to prevent overwrites)`);
+    console.log(`📋 Updated local state for ${Object.keys(allDeviceSchedules).length} devices (sync: ${allowSync})`);
     
-    // NO localStorage or server sync in deployed version to prevent data loss
+    // Only sync to server when explicitly allowed (user saves, not automatic loads)
+    if (allowSync) {
+      try {
+        const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+        await fetch(`${baseUrl}/api/schedules`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'devices',
+            deviceSchedules: allDeviceSchedules
+          })
+        });
+        console.log(`✅ Synced ${Object.keys(allDeviceSchedules).length} devices to server`);
+      } catch (error) {
+        console.error('❌ Failed to sync to server:', error);
+      }
+    }
   }
 
   getCustomSchedules(): Record<string, Record<SituationType, ScheduleEntry[]>> {
