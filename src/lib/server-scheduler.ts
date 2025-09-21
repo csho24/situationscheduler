@@ -23,9 +23,7 @@ export class ServerScheduler {
   private lastSyncTime: number = 0;
 
   constructor() {
-    console.log(`🏗️ Creating ServerScheduler - syncing to Supabase`);
-    // Load from localStorage first (for sync to Supabase)
-    this.loadFromLocalStorage();
+    console.log(`🏗️ Creating ServerScheduler - using Supabase only`);
     // Only load from server on client side to avoid SSR issues
     if (typeof window !== 'undefined') {
       this.loadFromServer();
