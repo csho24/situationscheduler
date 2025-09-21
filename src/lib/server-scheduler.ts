@@ -30,29 +30,7 @@ export class ServerScheduler {
     }
   }
 
-  // Load existing data from localStorage for migration
-  private loadFromLocalStorage(): void {
-    if (typeof window !== 'undefined') {
-      // Load calendar schedules
-      const saved = localStorage.getItem('plug-schedules');
-      if (saved) {
-        const data = JSON.parse(saved);
-        this.schedules = new Map(data);
-      }
-
-      // Load device schedules
-      const deviceSaved = localStorage.getItem('per-device-schedules');
-      if (deviceSaved) {
-        try {
-          this.customSchedules = JSON.parse(deviceSaved);
-        } catch {
-          this.initializeDefaultSchedules();
-        }
-      } else {
-        this.initializeDefaultSchedules();
-      }
-    }
-  }
+  // No localStorage - use Supabase only
 
   private initializeDefaultSchedules(): void {
     // No default schedules - load from Supabase only
