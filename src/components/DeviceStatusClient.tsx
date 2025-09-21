@@ -9,9 +9,9 @@ const LAPTOP_DEVICE_ID = 'a34b0f81d957d06e4aojr1'; // Smart Life app device - WO
 const USB_HUB_DEVICE_ID = 'a3240659645e83dcfdtng7'; // Smart Life app device - WORKING
 
 const DEVICES = [
-  { id: LIGHTS_DEVICE_ID, name: 'Lights', icon: Lightbulb, app: 'Smart Life' },
-  { id: LAPTOP_DEVICE_ID, name: 'Laptop', icon: Laptop, app: 'Smart Life' },
-  { id: USB_HUB_DEVICE_ID, name: 'USB Hub', icon: Usb, app: 'Smart Life' }
+  { id: LIGHTS_DEVICE_ID, name: 'Lights', icon: Lightbulb, app: LIGHTS_DEVICE_ID },
+  { id: LAPTOP_DEVICE_ID, name: 'Laptop', icon: Laptop, app: LAPTOP_DEVICE_ID },
+  { id: USB_HUB_DEVICE_ID, name: 'USB Hub', icon: Usb, app: USB_HUB_DEVICE_ID }
 ];
 
 function DeviceStatusClient() {
@@ -124,7 +124,7 @@ function DeviceStatusClient() {
         >
           {DEVICES.map((device, index) => (
             <option key={device.id} value={index}>
-              {device.name} ({device.app} app)
+              {device.name}
             </option>
           ))}
         </select>
@@ -139,6 +139,7 @@ function DeviceStatusClient() {
               </div>
               <div>
                 <h3 className="font-medium text-gray-800">{currentDevice.name}</h3>
+                <p className="text-xs text-gray-500 font-mono">{currentDevice.id}</p>
                 <p className="text-sm text-gray-600" suppressHydrationWarning={true}>
                   {error ? 'Error' : isOnline === null ? 'Checking...' : isOnline ? 'Online' : 'Offline'}
                 </p>

@@ -91,7 +91,7 @@ function DeviceControl({ device, deviceStates, setDeviceStates, deviceStatesInit
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-gray-800 truncate">{device.name}</div>
-        <div className="text-xs text-gray-500">{device.app}</div>
+        <div className="text-xs text-gray-500 font-mono">{device.id}</div>
       </div>
       
       {/* Toggle Switch */}
@@ -612,7 +612,7 @@ export default function Home() {
               >
                 {DEVICES.map((device, index) => (
                   <option key={device.id} value={index}>
-                    {device.name} ({device.app})
+                    {device.name}
                   </option>
                 ))}
               </select>
