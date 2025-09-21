@@ -646,4 +646,30 @@ const response = await fetch(`${baseUrl}/api/tuya`, {
 
 **This ensures cron uses the exact same authentication and API logic as working manual controls.**
 
-**STATUS: COMPLETE** - Full server-side scheduling with working switch activation!
+**STATUS: DEBUGGING FINAL SWITCH ACTIVATION** - Cron executes but devices don't physically activate!
+
+## Attempt 28: Base URL Fix + API Debug (September 21, 2025) - INVESTIGATING
+
+**Problem:** After fixing cron to use deployed API, switches still don't activate physically
+
+**What we discovered:**
+1. ✅ **Deployed cron finds schedules correctly** - Shows 17 executed actions 
+2. ✅ **Deployed tuya API works** - Manual test successfully turned lights off
+3. ❌ **Cron API calls failing silently** - No physical device activation
+
+**Root cause found:** Deployed cron was calling `localhost:3001/api/tuya` which doesn't exist!
+
+**Fix applied:**
+```typescript
+// OLD: process.env.VERCEL_URL (doesn't exist)
+// NEW: process.env.NODE_ENV === 'production'
+const baseUrl = process.env.NODE_ENV === 'production' ? 'https://situationscheduler.vercel.app' : 'http://localhost:3001';
+```
+
+**Debug changes:**
+- Added `apiResult` and `apiDetails` to cron response to see if API calls succeed/fail
+- Fixed TypeScript build errors (`VERCEL_URL` property, `error` type casting)
+
+**Current status:** Waiting for deployment to test if switches now activate
+
+**Next step:** Check cron response for `apiResult: 'success'` vs `'failed'` or `'error'`

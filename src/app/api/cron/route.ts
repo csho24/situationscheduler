@@ -101,10 +101,10 @@ export async function GET() {
         const [hours, minutes] = schedule.time.split(':').map(Number);
         const scheduleTime = hours * 60 + minutes;
         
-        console.log(`⏰ ${device.name}: Checking ${schedule.time} (${scheduleTime} min) ${schedule.action} - ${scheduleTime <= currentTime ? 'PAST' : 'FUTURE'}`);
+        console.log(`⏰ ${device.name}: Checking ${schedule.time} (${scheduleTime} min) ${schedule.action} - ${scheduleTime === currentTime ? 'NOW' : 'SKIP'}`);
         
-        if (scheduleTime <= currentTime) {
-          // This schedule should have executed - EXECUTE IT NOW
+        if (scheduleTime === currentTime) {
+          // This schedule is for RIGHT NOW - EXECUTE IT
           console.log(`⚡ ${device.name}: Executing ${schedule.time} ${schedule.action}`);
           
           try {
