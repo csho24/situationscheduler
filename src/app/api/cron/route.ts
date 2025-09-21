@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { tuyaAPI } from '@/lib/tuya-api';
-import { supabase } from '@/lib/supabase';
 import { DEVICES } from '@/lib/persistent-storage';
 import crypto from 'crypto';
 
@@ -33,21 +31,6 @@ async function generateSignature(method: string, path: string, timestamp: string
   return crypto.createHmac('sha256', SECRET).update(stringToSign).digest('hex').toUpperCase();
 }
 
-// Fallback: if Supabase fails, use hardcoded schedules
-const FALLBACK_SCHEDULES: Record<string, Array<{time: string; action: string}>> = {
-  'a34b0f81d957d06e4aojr1': [ // Laptop
-    { time: '10:00', action: 'on' },
-    { time: '11:00', action: 'off' },
-    { time: '14:00', action: 'on' },
-    { time: '15:00', action: 'off' },
-    { time: '17:00', action: 'on' },
-    { time: '19:03', action: 'on' },
-    { time: '20:00', action: 'on' },
-    { time: '21:00', action: 'off' },
-    { time: '22:00', action: 'on' },
-    { time: '23:00', action: 'off' }
-  ]
-};
 
 // Simple endpoint for external cron services that can't send headers
 export async function GET() {
@@ -71,7 +54,7 @@ export async function GET() {
     console.log(`🔍 CRON SCHEDULE CHECK (${tz}) at ${hour.toString().padStart(2,'0')}:${minute.toString().padStart(2,'0')} (${currentTime} minutes)`);
     
     // Use the SAME approach as /api/schedules endpoint
-    const baseUrl = 'https://situationscheduler.vercel.app';
+    const baseUrl = process.env.VERCEL_URL ? `https://situationscheduler.vercel.app` : 'http://localhost:3001';
     const response = await fetch(`${baseUrl}/api/schedules`);
     const data = await response.json();
     
@@ -96,8 +79,11 @@ export async function GET() {
     
     // Group schedules by device for the current situation
     Object.entries(deviceSchedules).forEach(([deviceId, deviceSchedule]) => {
-      if (deviceSchedule[situation]) {
-        schedulesByDevice[deviceId] = deviceSchedule[situation];
+      if (deviceSchedule && typeof deviceSchedule === 'object') {
+        const schedule = deviceSchedule as Record<string, Array<{time: string; action: string}>>;
+        if (schedule[situation]) {
+          schedulesByDevice[deviceId] = schedule[situation];
+        }
       }
     });
     
@@ -109,7 +95,7 @@ export async function GET() {
       const device = DEVICES.find(d => d.id === deviceId);
       if (!device) continue;
       
-      console.log(`📋 ${device.name} ${calendarData.situation} schedule:`, deviceSchedule);
+      console.log(`📋 ${device.name} ${situation} schedule:`, deviceSchedule);
       
       for (const schedule of deviceSchedule) {
         const [hours, minutes] = schedule.time.split(':').map(Number);
@@ -124,15 +110,19 @@ export async function GET() {
           try {
             // Execute the device control directly via Tuya API
             const commands = [{ code: 'switch_1', value: schedule.action === 'on' }];
+            const accessToken = await getAccessToken();
+            const timestamp = Date.now().toString();
+            const signature = await generateSignature('POST', `/v1.0/devices/${deviceId}/commands`, timestamp, accessToken, JSON.stringify({ commands }));
+            
             const response = await fetch(`https://openapi-sg.iotbing.com/v1.0/devices/${deviceId}/commands`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 'client_id': 'enywhg3tuc4nkjuc4tfk',
-                'access_token': await getAccessToken(),
-                't': Date.now().toString(),
+                'access_token': accessToken,
+                't': timestamp,
                 'sign_method': 'HMAC-SHA256',
-                'sign': await generateSignature('POST', `/v1.0/devices/${deviceId}/commands`, Date.now().toString(), await getAccessToken(), JSON.stringify({ commands }))
+                'sign': signature
               },
               body: JSON.stringify({ commands })
             });
@@ -144,37 +134,15 @@ export async function GET() {
             const result = await response.json();
             console.log(`🔌 ${device.name}: Turn ${schedule.action.toUpperCase()} result:`, result);
             
-            // Log execution to Supabase
-            await supabase
-              .from('execution_log')
-              .insert({
-                device_id: deviceId,
-                action: schedule.action,
-                scheduled_time: schedule.time,
-                success: true
-              });
-            
+            // Log execution (removed Supabase logging for now)
             executedActions.push({
               deviceId,
               deviceName: device.name,
               time: schedule.time,
               action: schedule.action
             });
-            
-            console.log(`✅ ${device.name}: ${schedule.action} executed successfully`);
           } catch (error) {
             console.error(`❌ ${device.name}: Failed to ${schedule.action}:`, error);
-            
-            // Log failed execution to Supabase
-            await supabase
-              .from('execution_log')
-              .insert({
-                device_id: deviceId,
-                action: schedule.action,
-                scheduled_time: schedule.time,
-                success: false,
-                error_message: error instanceof Error ? error.message : 'Unknown error'
-              });
           }
         } else {
           console.log(`⏰ ${device.name}: ${schedule.time} ${schedule.action} is in the future`);

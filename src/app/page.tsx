@@ -299,7 +299,7 @@ export default function Home() {
     // Start local scheduler for development
     startLocalScheduler();
     
-              // Force sync localStorage to server after mount to avoid hydration issues
+              // Sync device schedules to server after mount
               serverScheduler.forceSync();
 
               // DEBUG: Log what's in localStorage
