@@ -239,18 +239,31 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [customSchedules, setCustomSchedules] = useState(() => serverScheduler.getCustomSchedules());
 
-  // Load data from server on mount
+  // Load data directly from API on mount - bypass server scheduler
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
-      // Wait for server data to load, then update UI state
-      setTimeout(() => {
-        const serverCustomSchedules = serverScheduler.getCustomSchedules();
-        if (Object.keys(serverCustomSchedules).length > 0) {
-          setCustomSchedules(serverCustomSchedules);
-          console.log(`📋 UI: Loaded ${Object.keys(serverCustomSchedules).length} devices from server`);
+      const loadDirectFromAPI = async () => {
+        try {
+          console.log(`📋 UI: Loading data directly from API...`);
+          const response = await fetch('/api/schedules');
+          const data = await response.json();
+          
+          if (data.success && data.deviceSchedules) {
+            console.log(`✅ UI: Loaded ${Object.keys(data.deviceSchedules).length} devices from API`);
+            setCustomSchedules(data.deviceSchedules);
+            
+            // Also update the server scheduler
+            serverScheduler.updateCustomSchedules(data.deviceSchedules);
+            setTodayInfo(serverScheduler.getTodayScheduleInfo());
+          } else {
+            console.log(`❌ UI: No device schedules in API response`);
+          }
+        } catch (error) {
+          console.error('❌ UI: Failed to load from API:', error);
         }
-        setTodayInfo(serverScheduler.getTodayScheduleInfo());
-      }, 1000); // Give server time to load
+      };
+      
+      loadDirectFromAPI();
     }
   }, []);
 
@@ -620,6 +633,13 @@ export default function Home() {
                 </div>
                 <div className="space-y-2">
                   {(() => {
+                    // DEBUG: Log what schedules we have for the current device
+                    console.log(`🔍 UI Debug - Device ${selectedDevice.id}:`, {
+                      hasCustomSchedules: Object.keys(customSchedules).length > 0,
+                      deviceSchedule: customSchedules[selectedDevice.id],
+                      allDevices: Object.keys(customSchedules)
+                    });
+                    
                     const workSchedule = customSchedules[selectedDevice.id]?.work || [];
                     const currentTimeMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
                     
