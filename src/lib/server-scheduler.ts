@@ -40,12 +40,10 @@ export class ServerScheduler {
 
   constructor() {
     console.log(`🏗️ Creating ServerScheduler - syncing with server state`);
+    this.loadFromLocalStorage();
     // Only load from server on client side to avoid SSR issues
     if (typeof window !== 'undefined') {
       this.loadFromServer();
-    } else {
-      // On server side, just load from localStorage
-      this.loadFromLocalStorage();
     }
   }
 
@@ -107,25 +105,20 @@ export class ServerScheduler {
           console.log(`📋 Loaded device schedules for ${Object.keys(this.customSchedules).length} devices from server`);
         }
         
-        // Save server data to localStorage for caching
-        this.saveToLocalStorage();
-      } else {
-        // Server failed, fallback to localStorage
-        console.log('📱 Server failed, using localStorage fallback');
-        this.loadFromLocalStorage();
+        // Sync local data to server to ensure consistency
+        this.syncToServer();
       }
     } catch (error) {
       console.error('❌ Failed to load from server:', error);
-      // Fallback to localStorage
-      console.log('📱 Using localStorage as fallback');
-      this.loadFromLocalStorage();
+      // Fallback to syncing local data to server
+      this.syncToServer();
     }
   }
 
   // Sync local state to server
   async syncToServer(): Promise<void> {
     try {
-      const scheduleData = [...this.schedules.entries()].reduce((acc, [key, value]) => {
+      const scheduleData = Array.from(this.schedules.entries()).reduce((acc, [key, value]) => {
         acc[key] = value;
         return acc;
       }, {} as Record<string, DaySchedule>);
@@ -147,19 +140,6 @@ export class ServerScheduler {
     }
   }
 
-  // Save current state to localStorage for caching
-  private saveToLocalStorage(): void {
-    if (typeof window !== 'undefined') {
-      // Save calendar schedules
-      localStorage.setItem('plug-schedules', JSON.stringify([...this.schedules.entries()]));
-      
-      // Save device schedules
-      localStorage.setItem('per-device-schedules', JSON.stringify(this.customSchedules));
-      
-      console.log(`💾 Saved current state to localStorage`);
-    }
-  }
-
   // Force sync after component mounts to avoid hydration issues
   forceSync(): void {
     if (typeof window !== 'undefined') {
@@ -173,7 +153,7 @@ export class ServerScheduler {
     
     // Save to localStorage for immediate persistence
     if (typeof window !== 'undefined') {
-      const data = [...this.schedules.entries()];
+      const data = Array.from(this.schedules.entries());
       localStorage.setItem('plug-schedules', JSON.stringify(data));
     }
 
@@ -200,7 +180,7 @@ export class ServerScheduler {
   }
 
   getAllSchedules(): DaySchedule[] {
-    return [...this.schedules.values()];
+    return Array.from(this.schedules.values());
   }
 
   // Update device schedules and sync to server
