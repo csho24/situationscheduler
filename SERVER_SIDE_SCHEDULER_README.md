@@ -438,3 +438,17 @@ The scheduler works server-side and deployed version now has correct schedules.
 - ❌ Race condition causes inconsistent behavior
 
 **Root cause identified:** Localhost and deployed versions are using different data sources (localStorage vs Supabase)
+
+## Attempt 20: Remove localStorage from Deployed Version (September 21, 2025) - Final Fix
+
+**What we changed:**
+1. **Removed localStorage from deployed version**: Only loads from localStorage on localhost
+2. **Removed hardcoded DEFAULT_SCHEDULES**: No more fallback to `21:00`, `22:00`
+3. **Deployed version uses Supabase only**: Single source of truth
+
+**Current status:**
+- ✅ Deployed version no longer uses localStorage
+- ❌ Supabase is empty (localhost schedules not synced yet)
+- ❌ Need one-time sync to get localhost `22:45` schedules into Supabase
+
+**Next step:** One-time sync to migrate localhost schedules to Supabase, then remove localStorage completely

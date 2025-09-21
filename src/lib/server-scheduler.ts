@@ -24,10 +24,8 @@ export class ServerScheduler {
 
   constructor() {
     console.log(`🏗️ Creating ServerScheduler - syncing with server state`);
-    // Only load from localStorage in development (localhost)
-    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-      this.loadFromLocalStorage();
-    }
+    // Load from localStorage first (for one-time sync)
+    this.loadFromLocalStorage();
     // Only load from server on client side to avoid SSR issues
     if (typeof window !== 'undefined') {
       this.loadFromServer();
