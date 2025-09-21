@@ -239,10 +239,24 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [customSchedules, setCustomSchedules] = useState(() => serverScheduler.getCustomSchedules());
 
-  // Update scheduler with custom schedules on load
+  // Load data from server on mount
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
-      // Update scheduler with all device schedules
+      // Wait for server data to load, then update UI state
+      setTimeout(() => {
+        const serverCustomSchedules = serverScheduler.getCustomSchedules();
+        if (Object.keys(serverCustomSchedules).length > 0) {
+          setCustomSchedules(serverCustomSchedules);
+          console.log(`📋 UI: Loaded ${Object.keys(serverCustomSchedules).length} devices from server`);
+        }
+        setTodayInfo(serverScheduler.getTodayScheduleInfo());
+      }, 1000); // Give server time to load
+    }
+  }, []);
+
+  // Update scheduler with custom schedules when state changes
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
       serverScheduler.updateCustomSchedules(customSchedules);
       setTodayInfo(serverScheduler.getTodayScheduleInfo());
     }

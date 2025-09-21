@@ -115,13 +115,12 @@ export class ServerScheduler {
     return [...this.schedules.values()];
   }
 
-  // Update device schedules and sync to server
+  // Update device schedules (local state only - no sync to prevent overwrites)
   async updateCustomSchedules(allDeviceSchedules: Record<string, Record<SituationType, ScheduleEntry[]>>): Promise<void> {
     this.customSchedules = allDeviceSchedules;
+    console.log(`📋 Updated local state for ${Object.keys(allDeviceSchedules).length} devices (no server sync to prevent overwrites)`);
     
-    // DISABLED - no localStorage or server sync in deployed version
-    console.log(`🚫 updateCustomSchedules() disabled - deployed version is READ-ONLY`);
-    console.log(`📋 Would have updated ${Object.keys(allDeviceSchedules).length} devices, but sync disabled`);
+    // NO localStorage or server sync in deployed version to prevent data loss
   }
 
   getCustomSchedules(): Record<string, Record<SituationType, ScheduleEntry[]>> {
