@@ -2,6 +2,36 @@ import { NextResponse } from 'next/server';
 import { tuyaAPI } from '@/lib/tuya-api';
 import { supabase } from '@/lib/supabase';
 import { DEVICES } from '@/lib/persistent-storage';
+import crypto from 'crypto';
+
+const ACCESS_ID = 'enywhg3tuc4nkjuc4tfk';
+const SECRET = '0ef25f248d1f43828b829f2712f93573';
+const BASE_URL = 'https://openapi-sg.iotbing.com';
+
+async function getAccessToken(): Promise<string> {
+  const timestamp = Date.now().toString();
+  const stringToSign = `${ACCESS_ID}${timestamp}GET\n${crypto.createHash('sha256').update('').digest('hex')}\n\n/v1.0/token?grant_type=1`;
+  const signature = crypto.createHmac('sha256', SECRET).update(stringToSign).digest('hex').toUpperCase();
+  
+  const response = await fetch(`${BASE_URL}/v1.0/token?grant_type=1`, {
+    method: 'GET',
+    headers: {
+      't': timestamp,
+      'sign_method': 'HMAC-SHA256',
+      'client_id': ACCESS_ID,
+      'sign': signature,
+      'Content-Type': 'application/json'
+    }
+  });
+  
+  const data = await response.json();
+  return data.result.access_token;
+}
+
+async function generateSignature(method: string, path: string, timestamp: string, accessToken: string, body: string = ''): Promise<string> {
+  const stringToSign = `${method}\n${crypto.createHash('sha256').update(body).digest('hex')}\n\n${path}`;
+  return crypto.createHmac('sha256', SECRET).update(stringToSign).digest('hex').toUpperCase();
+}
 
 // Fallback: if Supabase fails, use hardcoded schedules
 const FALLBACK_SCHEDULES: Record<string, Array<{time: string; action: string}>> = {
@@ -107,14 +137,27 @@ export async function GET() {
           console.log(`⚡ ${device.name}: Executing ${schedule.time} ${schedule.action}`);
           
           try {
-            // Execute the device control
-            if (schedule.action === 'on') {
-              const result = await tuyaAPI.turnOn(deviceId);
-              console.log(`🔌 ${device.name}: Turn ON result:`, result);
-            } else {
-              const result = await tuyaAPI.turnOff(deviceId);
-              console.log(`🔌 ${device.name}: Turn OFF result:`, result);
+            // Execute the device control directly via Tuya API
+            const commands = [{ code: 'switch_1', value: schedule.action === 'on' }];
+            const response = await fetch(`https://openapi-sg.iotbing.com/v1.0/devices/${deviceId}/commands`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'client_id': 'enywhg3tuc4nkjuc4tfk',
+                'access_token': await getAccessToken(),
+                't': Date.now().toString(),
+                'sign_method': 'HMAC-SHA256',
+                'sign': await generateSignature('POST', `/v1.0/devices/${deviceId}/commands`, Date.now().toString(), await getAccessToken(), JSON.stringify({ commands }))
+              },
+              body: JSON.stringify({ commands })
+            });
+            
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
             }
+            
+            const result = await response.json();
+            console.log(`🔌 ${device.name}: Turn ${schedule.action.toUpperCase()} result:`, result);
             
             // Log execution to Supabase
             await supabase
