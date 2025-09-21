@@ -300,7 +300,7 @@ export default function Home() {
     startLocalScheduler();
     
               // Sync device schedules to server after mount
-              serverScheduler.forceSync();
+              // No sync - read-only from Supabase
 
               // DEBUG: Log what's in localStorage
               console.log('🔍 LOCALSTORAGE DEBUG:');
@@ -415,7 +415,7 @@ export default function Home() {
     await serverScheduler.updateCustomSchedules(newSchedules);
     
     // Force sync to server to ensure data is persisted
-    await serverScheduler.syncToServer();
+    // No sync - read-only from Supabase
     
     setTodayInfo(serverScheduler.getTodayScheduleInfo());
     
