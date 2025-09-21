@@ -58,8 +58,7 @@ export class ServerScheduler {
           console.log(`📋 Loaded device schedules for ${Object.keys(this.customSchedules).length} devices from server`);
         }
         
-        // Save server data to localStorage for caching
-        this.saveToLocalStorage();
+        // No localStorage caching - use Supabase only
       }
     } catch (error) {
       console.error('❌ Failed to load from server:', error);
@@ -70,54 +69,25 @@ export class ServerScheduler {
 
   // Sync device schedules to server
   async syncToServer(): Promise<void> {
-    try {
-      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-      
-      // Sync device schedules
-      await fetch(`${baseUrl}/api/schedules`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'devices',
-          deviceSchedules: this.customSchedules
-        })
-      });
-
-      console.log(`🔄 Synced device schedules to server`);
-    } catch (error) {
-      console.error('❌ Failed to sync device schedules to server:', error);
-    }
+    // DISABLED - no sync to prevent data overwrites in deployed version
+    console.log(`🚫 syncToServer() disabled - deployed version is READ-ONLY`);
   }
 
-  // Save current state to localStorage for caching
+  // No localStorage - use Supabase only
   private saveToLocalStorage(): void {
-    if (typeof window !== 'undefined') {
-      // Save calendar schedules
-      localStorage.setItem('plug-schedules', JSON.stringify([...this.schedules.entries()]));
-      
-      // Save device schedules
-      localStorage.setItem('per-device-schedules', JSON.stringify(this.customSchedules));
-      
-      console.log(`💾 Saved current state to localStorage`);
-    }
+    // This method is now empty as localStorage is no longer used
   }
 
-  // Force sync after component mounts to avoid hydration issues
+  // No sync - read-only from Supabase  
   forceSync(): void {
-    if (typeof window !== 'undefined') {
-      setTimeout(() => this.syncToServer(), 100);
-    }
+    // This method is now empty - no sync to prevent data overwrites
   }
 
   // Set calendar assignment and sync to server
   async setSituation(date: string, situation: SituationType): Promise<void> {
     this.schedules.set(date, { date, situation });
     
-    // Save to localStorage for immediate persistence
-    if (typeof window !== 'undefined') {
-      const data = [...this.schedules.entries()];
-      localStorage.setItem('plug-schedules', JSON.stringify(data));
-    }
+    // No localStorage - use Supabase only
 
     // Sync to server
     try {
@@ -149,26 +119,9 @@ export class ServerScheduler {
   async updateCustomSchedules(allDeviceSchedules: Record<string, Record<SituationType, ScheduleEntry[]>>): Promise<void> {
     this.customSchedules = allDeviceSchedules;
     
-    // Save to localStorage for immediate persistence
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('per-device-schedules', JSON.stringify(allDeviceSchedules));
-    }
-
-    // Sync to server
-    try {
-      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-      await fetch(`${baseUrl}/api/schedules`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'devices',
-          deviceSchedules: allDeviceSchedules
-        })
-      });
-      console.log(`📋 Synced device schedules to server`);
-    } catch (error) {
-      console.error('❌ Failed to sync device schedules to server:', error);
-    }
+    // DISABLED - no localStorage or server sync in deployed version
+    console.log(`🚫 updateCustomSchedules() disabled - deployed version is READ-ONLY`);
+    console.log(`📋 Would have updated ${Object.keys(allDeviceSchedules).length} devices, but sync disabled`);
   }
 
   getCustomSchedules(): Record<string, Record<SituationType, ScheduleEntry[]>> {
