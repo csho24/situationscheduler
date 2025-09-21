@@ -109,7 +109,7 @@ export async function GET() {
           
           try {
             // Use the same API endpoint as manual controls for consistency
-            const baseUrl = process.env.VERCEL_URL ? 'https://situationscheduler.vercel.app' : 'http://localhost:3001';
+            const baseUrl = process.env.NODE_ENV === 'production' ? 'https://situationscheduler.vercel.app' : 'http://localhost:3001';
             console.log(`🔌 ${device.name}: Making API call to turn ${schedule.action} at ${schedule.time}`);
             const response = await fetch(`${baseUrl}/api/tuya`, {
               method: 'POST',
