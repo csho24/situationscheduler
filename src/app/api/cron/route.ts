@@ -110,6 +110,7 @@ export async function GET() {
           try {
             // Use the same API endpoint as manual controls for consistency
             const baseUrl = process.env.VERCEL_URL ? 'https://situationscheduler.vercel.app' : 'http://localhost:3001';
+            console.log(`🔌 ${device.name}: Making API call to turn ${schedule.action} at ${schedule.time}`);
             const response = await fetch(`${baseUrl}/api/tuya`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -126,6 +127,10 @@ export async function GET() {
             
             const result = await response.json();
             console.log(`🔌 ${device.name}: Turn ${schedule.action.toUpperCase()} result:`, result);
+            
+            if (!result.success) {
+              console.error(`❌ ${device.name}: API call failed:`, result);
+            }
             
             // Log execution (removed Supabase logging for now)
             executedActions.push({

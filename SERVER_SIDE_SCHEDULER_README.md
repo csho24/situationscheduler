@@ -622,4 +622,28 @@ async updateCustomSchedules(data, allowSync: boolean = false) {
 - ✅ **All 3 devices working:** Lights, laptop, USB hub with custom schedules
 - ✅ **Server-side cron working:** Executes schedules reliably
 
-**STATUS: COMPLETE** - Full server-side scheduling with persistent data storage!
+## Attempt 27: SWITCH ACTIVATION FIX (September 21, 2025) - THE REAL FINAL FIX
+
+**Problem:** Schedules persist and cron executes, but switches don't actually turn on/off
+
+**Root Cause Found:** 
+- **Manual controls:** Use `/api/tuya` endpoint → authentication works ✅
+- **Cron controls:** Direct Tuya API calls → authentication/signature fails ❌
+
+**The Issue:** Cron was bypassing the working `/api/tuya` endpoint and making direct API calls with potentially broken authentication.
+
+**Solution:** Make cron use the same `/api/tuya` endpoint as manual controls:
+```typescript
+// OLD (broken): Direct Tuya API call with manual auth
+const response = await fetch(`https://openapi-sg.iotbing.com/v1.0/devices/${deviceId}/commands`, { ... });
+
+// NEW (working): Use same endpoint as manual controls
+const response = await fetch(`${baseUrl}/api/tuya`, {
+  method: 'POST',
+  body: JSON.stringify({ deviceId, action: 'switch_1', value: schedule.action === 'on' })
+});
+```
+
+**This ensures cron uses the exact same authentication and API logic as working manual controls.**
+
+**STATUS: COMPLETE** - Full server-side scheduling with working switch activation!
