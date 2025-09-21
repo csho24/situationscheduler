@@ -6,9 +6,9 @@ import { ChevronLeft, ChevronRight, BriefcaseIcon, Coffee, Lightbulb, Laptop, Us
 import { serverScheduler, type SituationType } from '@/lib/server-scheduler';
 
 const DEVICES = [
-  { id: 'a3e31a88528a6efc15yf4o', name: 'Lights', icon: Lightbulb, app: 'Smart Life' },
-  { id: 'a34b0f81d957d06e4aojr1', name: 'Laptop', icon: Laptop, app: 'Smart Life' },
-  { id: 'a3240659645e83dcfdtng7', name: 'USB Hub', icon: Usb, app: 'Smart Life' }
+  { id: 'a3e31a88528a6efc15yf4o', name: 'Lights', icon: Lightbulb, app: 'a3e31a88528a6efc15yf4o' },
+  { id: 'a34b0f81d957d06e4aojr1', name: 'Laptop', icon: Laptop, app: 'a34b0f81d957d06e4aojr1' },
+  { id: 'a3240659645e83dcfdtng7', name: 'USB Hub', icon: Usb, app: 'a3240659645e83dcfdtng7' }
 ];
 
 interface CalendarProps {
@@ -25,15 +25,37 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
 
   useEffect(() => {
     setIsClient(true);
-    setSchedules(serverScheduler.getAllSchedules());
+    // Load schedules from server to get latest data
+    const loadSchedules = async () => {
+      try {
+        const response = await fetch('/api/schedules');
+        const data = await response.json();
+        if (data.success && data.calendarAssignments) {
+          setSchedules(data.calendarAssignments);
+        } else {
+          // Fallback to local scheduler
+          setSchedules(serverScheduler.getAllSchedules());
+        }
+      } catch (error) {
+        console.error('Failed to load schedules:', error);
+        // Fallback to local scheduler
+        setSchedules(serverScheduler.getAllSchedules());
+      }
+    };
+    loadSchedules();
   }, []);
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
+  
+  // Calculate leading empty cells to align first day with correct weekday
+  const startDayOfWeek = monthStart.getDay(); // 0 = Sunday, 1 = Monday, etc.
+  const leadingEmptyCells = Array(startDayOfWeek).fill(null);
 
   const handleDateClick = (date: Date) => {
-    const today = new Date();
+    // Use Singapore timezone to match cron logic
+    const today = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Singapore"}));
     today.setHours(0, 0, 0, 0);
     
     if (date >= today) {
@@ -46,7 +68,20 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
     if (selectedDate) {
       const dateString = format(selectedDate, 'yyyy-MM-dd');
       await serverScheduler.setSituation(dateString, situation);
-      setSchedules(serverScheduler.getAllSchedules());
+      
+      // Reload schedules from server to get updated data
+      try {
+        const response = await fetch('/api/schedules');
+        const data = await response.json();
+        if (data.success && data.calendarAssignments) {
+          setSchedules(data.calendarAssignments);
+        } else {
+          setSchedules(serverScheduler.getAllSchedules());
+        }
+      } catch (error) {
+        setSchedules(serverScheduler.getAllSchedules());
+      }
+      
       onDateSelect?.(selectedDate, situation);
       setShowSituationModal(false);
       setSelectedDevice(DEVICES[0]); // Reset to default
@@ -60,7 +95,8 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
   };
 
   const isPastDate = (date: Date) => {
-    const today = new Date();
+    // Use Singapore timezone to match cron logic
+    const today = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Singapore"}));
     today.setHours(0, 0, 0, 0);
     return date < today;
   };
@@ -99,9 +135,17 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
 
       {/* Calendar Days */}
       <div className="grid grid-cols-7 gap-1">
+        {/* Leading empty cells */}
+        {leadingEmptyCells.map((_, index) => (
+          <div key={`empty-${index}`} className="p-3"></div>
+        ))}
+        
+        {/* Actual month days */}
         {monthDays.map((date) => {
           const situation = getSituationForDate(date);
-          const isToday = isClient ? isSameDay(date, new Date()) : false;
+          // Use Singapore timezone to match cron logic
+          const singaporeToday = isClient ? new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Singapore"})) : new Date();
+          const isToday = isClient ? isSameDay(date, singaporeToday) : false;
           const isPast = isClient ? isPastDate(date) : false;
           
           return (

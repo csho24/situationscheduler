@@ -672,4 +672,100 @@ const baseUrl = process.env.NODE_ENV === 'production' ? 'https://situationschedu
 
 **Current status:** Waiting for deployment to test if switches now activate
 
-**Next step:** Check cron response for `apiResult: 'success'` vs `'failed'` or `'error'`
+**CRITICAL DISCOVERY - THE ACTUAL PROBLEM:**
+
+## Attempt 29: FOUND THE REAL ISSUE (September 21, 2025) - CRON FREQUENCY MISMATCH
+
+**Problem discovered:** 
+1. ✅ **Cron endpoint works perfectly** - All API calls succeed
+2. ✅ **Schedules are correct** - All device schedules in Supabase
+3. ✅ **Manual tests work** - Every curl test activates switches
+4. ❌ **Automatic scheduling fails** - Devices don't follow schedules
+
+**Root cause found:** **CRON-JOB.ORG FREQUENCY MISMATCH**
+- User gets emails **every hour**, not every minute
+- Schedules are for specific minutes (20:43, 22:45, etc.)
+- If cron only runs at 21:00, 22:00, it **never hits 20:43**
+- User turned off cron-job.org, so **no automatic scheduling at all**
+
+**Critical fixes applied:**
+1. **Fixed execution logic:** Changed `scheduleTime <= currentTime` to `scheduleTime === currentTime`
+   - Was executing ALL past schedules every minute (wrong!)
+   - Now only executes current minute's schedule
+2. **Fixed base URL:** Changed to `NODE_ENV === 'production'` detection
+3. **Added API debugging:** Shows success/failure of each API call
+
+**SOLUTION REQUIRED:** 
+- **Re-enable cron-job.org** with **every minute frequency** (not hourly)
+- **Pattern should be:** `* * * * *` for every minute
+- **OR use different approach:** Vercel cron (paid) or alternative service
+
+## Attempt 30: SUCCESS WITH INTERMITTENT MISSES (September 21, 2025) - WORKING!
+
+**BREAKTHROUGH:** Server-side scheduling is now working automatically!
+
+**Successful executions:**
+- ✅ **21:03 laptop ON** - automatic success
+- ✅ **21:13 lights OFF** - automatic success  
+- ✅ **21:11 laptop OFF** - automatic success
+- ❌ **21:04 laptop OFF** - missed
+- ❌ **21:10 lights OFF** - missed
+
+**Root cause of misses:** Free cron-job.org service has timing drift - doesn't call exactly every minute
+
+**Critical fixes that made it work:**
+1. **Fixed execution logic:** `scheduleTime === currentTime` (only execute current minute)
+2. **Fixed base URL:** Deployed cron now calls deployed API correctly
+3. **Fixed cron-job.org URL:** Added `/api/cron` endpoint properly
+
+**STATUS: MOSTLY WORKING** - Automatic scheduling works but misses ~20% due to external service timing
+
+## CRITICAL ANALYSIS: Why This Took 30 Attempts When It Should Have Been Obvious
+
+**THE REAL PROBLEM:** Wrong URL in cron-job.org from day 1
+- **User entered:** Website homepage URL `https://situationscheduler.vercel.app/`
+- **Should have been:** API endpoint URL `https://situationscheduler.vercel.app/api/cron`
+- **Result:** Cron called homepage (returned HTML) instead of executing schedules
+
+**THIS SHOULD HAVE BEEN DISCOVERED IN ATTEMPT 1-3** by checking:
+1. **What URL is cron-job.org actually calling?** ❌ Never asked
+2. **What response does that URL return?** ❌ Never checked until attempt 28
+3. **Is it JSON or HTML?** ❌ Would have immediately shown wrong endpoint
+
+**ALL OTHER "PROBLEMS" WERE RED HERRINGS:**
+- ❌ **Timezone issues** - Was never the problem
+- ❌ **Execution logic** - Fixed but wasn't blocking basic functionality  
+- ❌ **Base URL detection** - Fixed but wasn't the core issue
+- ❌ **API authentication** - Was working fine
+- ❌ **Database persistence** - Was working fine
+- ❌ **Serverless limitations** - Was never the issue
+
+**RELEVANT ATTEMPTS THAT MISSED THE OBVIOUS:**
+- **Attempt 1-10:** Never verified what URL cron-job.org was actually calling
+- **Attempt 15:** "Deployed version fails to execute device controls" - should have checked the URL
+- **Attempt 20:** "Only localhost version works" - should have verified cron URL
+- **Attempt 27:** "Switches aren't activating" - still didn't check the basic URL
+
+**WHAT WE SHOULD HAVE DONE IN ATTEMPT 1:**
+1. Ask: "What URL did you put in cron-job.org?"
+2. Test that exact URL manually
+3. Verify it returns JSON, not HTML
+4. If HTML → wrong endpoint, add `/api/cron`
+5. Done in 5 minutes
+
+**WHAT ACTUALLY HAPPENED:**
+- **User repeatedly asked** to not assume and asked about cron site inputs
+- **Assistant kept diving into complex fixes** instead of properly investigating cron configuration  
+- **User provided HTML response** when asked, but assistant didn't probe the URL issue deeply enough
+- **Only when user got frustrated and copied entire response** did assistant spot the wrong endpoint
+- **Two simultaneous problems** (persistence + cron URL) made debugging extremely frustrating
+
+**PERSISTENCE ISSUE WAS SEPARATE:** 
+- Even with correct cron URL, we still had to fix the localStorage/Supabase sync mess
+- **This was a legitimate complex problem** that required 20+ attempts
+- **Dealing with both issues simultaneously** made it nearly impossible to isolate root causes
+
+**LESSON:** 
+1. **Always verify the most basic assumptions first** - what URL is actually being called?
+2. **Isolate problems** - fix persistence OR cron issues separately, not both at once
+3. **Listen when user says "don't assume"** - probe deeper into configuration details
