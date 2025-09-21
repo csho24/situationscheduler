@@ -416,3 +416,25 @@ The scheduler works server-side and deployed version now has correct schedules.
 - **localStorage inaccessible**: Only exists in browser context
 - **Fundamental limitation**: Vercel serverless cannot maintain state
 - **Solution requires**: External database or different architecture
+
+## Attempt 19: Latest Deploy (September 21, 2025) - Race Condition Fix
+
+**What we changed:**
+1. **Restored constructor order**: `loadFromLocalStorage()` first, then `loadFromServer()`
+2. **Fixed syncToServer()**: Only syncs device schedules (type: 'devices'), removed calendar sync
+3. **Updated cron endpoint**: Now calls `/api/schedules` instead of direct Supabase queries
+4. **Added saveToLocalStorage()**: Saves server data to localStorage for caching
+
+**What we discovered:**
+- Supabase has template schedules (21:00, 22:00) from schema
+- Localhost has 22:45 schedules in localStorage only
+- Deployed version loads from Supabase (wrong schedules)
+- Race condition: Sometimes localStorage wins, sometimes Supabase wins
+
+**Current status:**
+- ✅ Localhost shows 22:45 schedules (from localStorage)
+- ❌ Deployed version shows template schedules (from Supabase)
+- ❌ Persistence still broken - new schedules don't stick on refresh
+- ❌ Race condition causes inconsistent behavior
+
+**Root cause identified:** Localhost and deployed versions are using different data sources (localStorage vs Supabase)

@@ -15,23 +15,7 @@ export interface DaySchedule {
   situation: SituationType;
 }
 
-// Default schedules for new users (fully editable)
-export const DEFAULT_SCHEDULES: Record<SituationType, ScheduleEntry[]> = {
-  work: [
-    { time: '21:00', action: 'on' },  // 9 PM
-    { time: '22:00', action: 'off' }  // 10 PM
-  ],
-  rest: [
-    { time: '10:00', action: 'on' },  // 10 AM
-    { time: '11:00', action: 'off' }, // 11 AM
-    { time: '14:00', action: 'on' },  // 2 PM
-    { time: '15:00', action: 'off' }, // 3 PM
-    { time: '17:00', action: 'on' },  // 5 PM
-    { time: '18:00', action: 'off' }, // 6 PM
-    { time: '21:00', action: 'on' },  // 9 PM
-    { time: '22:00', action: 'off' }  // 10 PM
-  ]
-};
+// No default schedules - use Supabase as single source of truth
 
 export class ServerScheduler {
   private schedules: Map<string, DaySchedule> = new Map();
@@ -40,7 +24,10 @@ export class ServerScheduler {
 
   constructor() {
     console.log(`🏗️ Creating ServerScheduler - syncing with server state`);
-    this.loadFromLocalStorage();
+    // Only load from localStorage in development (localhost)
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+      this.loadFromLocalStorage();
+    }
     // Only load from server on client side to avoid SSR issues
     if (typeof window !== 'undefined') {
       this.loadFromServer();
@@ -72,16 +59,8 @@ export class ServerScheduler {
   }
 
   private initializeDefaultSchedules(): void {
-    const DEVICES = [
-      { id: 'a3e31a88528a6efc15yf4o', name: 'Lights' },
-      { id: 'a34b0f81d957d06e4aojr1', name: 'Laptop' },
-      { id: 'a3240659645e83dcfdtng7', name: 'USB Hub' }
-    ];
-    
-    this.customSchedules = {};
-    DEVICES.forEach(device => {
-      this.customSchedules[device.id] = { ...DEFAULT_SCHEDULES };
-    });
+    // No default schedules - load from Supabase only
+    console.log('📱 No default schedules - using Supabase data only');
   }
 
   // Load data from server

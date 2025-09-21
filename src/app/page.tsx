@@ -11,7 +11,7 @@ import { tuyaAPI } from '@/lib/tuya-api';
 //   ssr: false,
 //   loading: () => <div className="text-center p-8">Loading device status...</div>
 // });
-import { serverScheduler, type SituationType, DEFAULT_SCHEDULES, type ScheduleEntry } from '@/lib/server-scheduler';
+import { serverScheduler, type SituationType, type ScheduleEntry } from '@/lib/server-scheduler';
 import { startLocalScheduler, stopLocalScheduler } from '@/lib/local-scheduler';
 
 const DEVICES = [
@@ -606,7 +606,7 @@ export default function Home() {
                 </div>
                 <div className="space-y-2">
                   {(() => {
-                    const workSchedule = customSchedules[selectedDevice.id]?.work || DEFAULT_SCHEDULES.work;
+                    const workSchedule = customSchedules[selectedDevice.id]?.work || [];
                     const currentTimeMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
                     
                     // Check if work schedule is active today (regardless of device)
@@ -683,7 +683,7 @@ export default function Home() {
                 </div>
                 <div className="space-y-2">
                   {(() => {
-                    const restSchedule = customSchedules[selectedDevice.id]?.rest || DEFAULT_SCHEDULES.rest;
+                    const restSchedule = customSchedules[selectedDevice.id]?.rest || [];
                     const currentTimeMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
                     
                     // Check if rest schedule is active today (regardless of device)
@@ -775,7 +775,7 @@ export default function Home() {
       {editingSituation && (
         <ScheduleEditor
           situation={editingSituation}
-          currentSchedule={(customSchedules[selectedDevice.id]?.[editingSituation]) || DEFAULT_SCHEDULES[editingSituation]}
+          currentSchedule={(customSchedules[selectedDevice.id]?.[editingSituation]) || []}
           onSave={handleSaveSchedule}
           onCancel={() => setEditingSituation(null)}
         />
