@@ -70,65 +70,38 @@ export async function GET() {
     
     console.log(`🔍 CRON SCHEDULE CHECK (${tz}) at ${hour.toString().padStart(2,'0')}:${minute.toString().padStart(2,'0')} (${currentTime} minutes)`);
     
-    // Get today's calendar assignment from Supabase
-    console.log(`🔍 DEBUG: Looking for calendar assignment for date: ${today}`);
-    const { data: calendarData, error: calendarError } = await supabase
-      .from('calendar_assignments')
-      .select('*')
-      .eq('date', today)
-      .single();
+    // Use the SAME approach as /api/schedules endpoint
+    const baseUrl = 'https://situationscheduler.vercel.app';
+    const response = await fetch(`${baseUrl}/api/schedules`);
+    const data = await response.json();
     
-    console.log(`🔍 DEBUG: Calendar query result:`, { calendarData, calendarError });
-    
-    let situation = 'rest'; // Default fallback
-    
-    if (calendarError) {
-      console.error('❌ Supabase calendar error:', calendarError);
-      console.log('🔄 Using fallback: assuming rest day');
-      situation = 'rest';
-    } else if (!calendarData) {
-      console.log('📋 No schedule for today, using fallback: rest day');
-      situation = 'rest';
-    } else {
-      situation = calendarData.situation;
-      console.log(`📋 Found calendar assignment: ${calendarData.date} -> ${calendarData.situation}`);
+    if (!data.success) {
+      console.error('❌ Failed to get schedules from API:', data.error);
+      return NextResponse.json({
+        success: false,
+        error: 'Failed to get schedules from API'
+      }, { status: 500 });
     }
+    
+    // Get today's situation from the API response
+    const schedules = data.schedules || {};
+    const todaySchedule = schedules[today];
+    const situation = todaySchedule?.situation || 'rest';
     
     console.log(`📋 Today's schedule: ${situation} day`);
     
-    // Get device schedules for today's situation from Supabase
-    console.log(`🔍 DEBUG: Looking for device schedules for situation: ${situation}`);
-    const { data: deviceSchedules, error: deviceError } = await supabase
-      .from('device_schedules')
-      .select('*')
-      .eq('situation', situation);
+    // Get device schedules from the API response
+    const deviceSchedules = data.deviceSchedules || {};
+    const schedulesByDevice: Record<string, Array<{time: string; action: string}>> = {};
     
-    console.log(`🔍 DEBUG: Device schedules query result:`, { 
-      count: deviceSchedules?.length || 0, 
-      data: deviceSchedules, 
-      error: deviceError 
+    // Group schedules by device for the current situation
+    Object.entries(deviceSchedules).forEach(([deviceId, deviceSchedule]) => {
+      if (deviceSchedule[situation]) {
+        schedulesByDevice[deviceId] = deviceSchedule[situation];
+      }
     });
     
-    let schedulesByDevice: Record<string, Array<{time: string; action: string}>> = {};
-    
-    if (deviceError) {
-      console.error('❌ Supabase device schedules error:', deviceError);
-      console.log('🔄 Using fallback schedules');
-      // Use fallback schedules
-      schedulesByDevice = FALLBACK_SCHEDULES;
-    } else {
-      // Group schedules by device from Supabase
-      deviceSchedules?.forEach(schedule => {
-        if (!schedulesByDevice[schedule.device_id]) {
-          schedulesByDevice[schedule.device_id] = [];
-        }
-        schedulesByDevice[schedule.device_id].push({
-          time: schedule.time,
-          action: schedule.action
-        });
-      });
-      console.log(`🔍 DEBUG: Grouped schedules by device:`, schedulesByDevice);
-    }
+    console.log(`📋 Loaded schedules for ${Object.keys(schedulesByDevice).length} devices`);
     
     const executedActions = [];
     
