@@ -54,7 +54,7 @@ export async function GET() {
     console.log(`🔍 CRON SCHEDULE CHECK (${tz}) at ${hour.toString().padStart(2,'0')}:${minute.toString().padStart(2,'0')} (${currentTime} minutes)`);
     
     // Use the SAME approach as /api/schedules endpoint
-    const baseUrl = process.env.VERCEL_URL ? `https://situationscheduler.vercel.app` : 'http://localhost:3001';
+    const baseUrl = process.env.NODE_ENV === 'production' ? `https://situationscheduler.vercel.app` : 'http://localhost:3001';
     const response = await fetch(`${baseUrl}/api/schedules`);
     const data = await response.json();
     
@@ -150,7 +150,7 @@ export async function GET() {
               time: schedule.time,
               action: schedule.action,
               apiResult: 'error',
-              apiDetails: { error: error.message }
+              apiDetails: { error: (error as Error).message }
             });
           }
         } else {
