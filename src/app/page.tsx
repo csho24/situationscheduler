@@ -91,7 +91,7 @@ function DeviceControl({ device, deviceStates, setDeviceStates, deviceStatesInit
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-gray-800 truncate">{device.name}</div>
-        <div className="text-xs text-gray-500 font-mono">{device.id}</div>
+        <div className="text-xs text-gray-500">{device.app}</div>
       </div>
       
       {/* Toggle Switch */}
@@ -238,42 +238,12 @@ export default function Home() {
   const [deviceStatesInitialized, setDeviceStatesInitialized] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [customSchedules, setCustomSchedules] = useState(() => serverScheduler.getCustomSchedules());
-  const [isLoadingSchedules, setIsLoadingSchedules] = useState(true);
 
-  // Load data directly from API on mount - bypass server scheduler
+  // Update scheduler with custom schedules on load
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
-      const loadDirectFromAPI = async () => {
-        try {
-          console.log(`📋 UI: Loading data directly from API...`);
-          const response = await fetch('/api/schedules');
-          const data = await response.json();
-          
-          if (data.success && data.deviceSchedules) {
-            console.log(`✅ UI: Loaded ${Object.keys(data.deviceSchedules).length} devices from API`);
-            setCustomSchedules(data.deviceSchedules);
-            
-            // Also update the server scheduler (no sync - just load data)
-            serverScheduler.updateCustomSchedules(data.deviceSchedules, false);
-            setTodayInfo(serverScheduler.getTodayScheduleInfo());
-          } else {
-            console.log(`❌ UI: No device schedules in API response`);
-          }
-          setIsLoadingSchedules(false);
-        } catch (error) {
-          console.error('❌ UI: Failed to load from API:', error);
-          setIsLoadingSchedules(false);
-        }
-      };
-      
-      loadDirectFromAPI();
-    }
-  }, []);
-
-  // Update scheduler with custom schedules when state changes (no sync)
-  React.useEffect(() => {
-    if (typeof window !== 'undefined') {
-      serverScheduler.updateCustomSchedules(customSchedules, false);
+      // Update scheduler with all device schedules
+      serverScheduler.updateCustomSchedules(customSchedules);
       setTodayInfo(serverScheduler.getTodayScheduleInfo());
     }
   }, [customSchedules]);
@@ -329,8 +299,8 @@ export default function Home() {
     // Start local scheduler for development
     startLocalScheduler();
     
-              // Sync device schedules to server after mount
-              // No sync - read-only from Supabase
+              // Force sync localStorage to server after mount to avoid hydration issues
+              serverScheduler.forceSync();
 
               // DEBUG: Log what's in localStorage
               console.log('🔍 LOCALSTORAGE DEBUG:');
@@ -441,11 +411,11 @@ export default function Home() {
     };
     setCustomSchedules(newSchedules);
     
-    // Update the server scheduler and save to server (user explicit save)
-    await serverScheduler.updateCustomSchedules(newSchedules, true);
+    // Update the server scheduler to use new custom schedules for all devices
+    await serverScheduler.updateCustomSchedules(newSchedules);
     
     // Force sync to server to ensure data is persisted
-    // No sync - read-only from Supabase
+    await serverScheduler.syncToServer();
     
     setTodayInfo(serverScheduler.getTodayScheduleInfo());
     
@@ -612,7 +582,7 @@ export default function Home() {
               >
                 {DEVICES.map((device, index) => (
                   <option key={device.id} value={index}>
-                    {device.name}
+                    {device.name} ({device.app})
                   </option>
                 ))}
               </select>
@@ -624,7 +594,7 @@ export default function Home() {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                     <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                    Work Day Schedule - {selectedDevice.name}
+                    {selectedDevice.name} - Work Day
                   </h3>
                   <button
                     onClick={() => setEditingSituation('work')}
@@ -636,13 +606,6 @@ export default function Home() {
                 </div>
                 <div className="space-y-2">
                   {(() => {
-                    // DEBUG: Log what schedules we have for the current device
-                    console.log(`🔍 UI Debug - Device ${selectedDevice.id}:`, {
-                      hasCustomSchedules: Object.keys(customSchedules).length > 0,
-                      deviceSchedule: customSchedules[selectedDevice.id],
-                      allDevices: Object.keys(customSchedules)
-                    });
-                    
                     const workSchedule = customSchedules[selectedDevice.id]?.work || [];
                     const currentTimeMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
                     
@@ -708,7 +671,7 @@ export default function Home() {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                     <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                    Rest Day Schedule - {selectedDevice.name}
+                    {selectedDevice.name} - Rest Day
                   </h3>
                   <button
                     onClick={() => setEditingSituation('rest')}
