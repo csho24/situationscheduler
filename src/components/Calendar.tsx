@@ -184,25 +184,11 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
       {showSituationModal && selectedDate && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-80 max-w-90vw">
-            <h3 className="text-lg font-semibold mb-4 text-center">
-              Select situation for {format(selectedDate, 'MMMM d, yyyy')}
+            <h3 className="text-lg font-semibold mb-4 text-center text-gray-800">
+              {format(selectedDate, 'MMMM d, EEE')}
             </h3>
             
-            {/* Device Selector */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Select Device:</label>
-              <select 
-                value={DEVICES.findIndex(d => d.id === selectedDevice.id)} 
-                onChange={(e) => setSelectedDevice(DEVICES[Number(e.target.value)])}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 bg-white"
-              >
-                {DEVICES.map((device, index) => (
-                  <option key={device.id} value={index}>
-                    {device.name} ({device.app})
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Device Selector removed for simplicity */}
             
             <div className="space-y-3">
               <button

@@ -792,15 +792,6 @@ export default function Home() {
                   <Plus size={20} />
                   Add Custom Routine
                 </button>
-                
-                {/* Test Server Scheduler Button */}
-                <button
-                  onClick={executeToday}
-                  className="w-full flex items-center justify-center gap-2 p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Power size={16} />
-                  Test Server Scheduler
-                </button>
               </div>
 
             </div>
@@ -817,6 +808,20 @@ export default function Home() {
           onCancel={() => setEditingSituation(null)}
         />
       )}
+
+      {/* Debug Trigger – centered and close to footer */}
+      <div className="max-w-4xl mx-auto px-4 mt-2 mb-1">
+        <div className="flex justify-center">
+          <button
+            onClick={executeToday}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            title="Run server-side schedule check now (sync to current minute)"
+          >
+            <Power size={14} />
+            Sync Now
+          </button>
+        </div>
+      </div>
 
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 mt-16">

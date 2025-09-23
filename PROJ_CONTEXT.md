@@ -58,7 +58,11 @@ This app solves the problem of inconsistent work schedules where traditional fix
 - Wrapper: `src/lib/tuya-api.ts`
   - Server builds absolute base URL for `/api/tuya`
   - `getDeviceStatus(deviceId)` → `GET /api/tuya?action=status&deviceId=...`
-  - `turnOn/turnOff(deviceId)` → `POST /api/tuya` with `{ action: 'switch_1', value: true|false }`
+  - Smart plugs: `turnOn/turnOff(deviceId)` → `POST /api/tuya` with `{ action: 'switch_1', value: true|false }`
+  - Aircon (IR):
+    - ON (combined state): `POST /v2.0/infrareds/{ir_id}/air-conditioners/{remote_id}/scenes/command` with `{ power:1, mode:0, temp:27, wind:2 }`
+    - OFF (standard): `POST` remotes command with `{ category_id:5, key:"PowerOff", key_id:0 }`
+    - Note: IR devices are stateless via `/v1.0/devices/{deviceId}`; UI shows neutral Aircon state on refresh.
 
 ### Timezone handling
 - `GET /api/cron` computes current time and date in `Asia/Singapore` via `Intl.DateTimeFormat`.
@@ -67,5 +71,9 @@ This app solves the problem of inconsistent work schedules where traditional fix
 - Localhost and deployed both read schedules from Supabase through `/api/schedules`.
 - Having localhost open means it can also trigger scheduling (`POST /api/scheduler`) every 60 seconds while the page is open.
 - No additional persistence of execution history is implemented beyond console logs and optional `lastExecutedEvents` in server storage (for duplicate suppression on the server route).
+
+### Local vs Deployed (base URL & clashes)
+- For local dev, set `NEXT_PUBLIC_BASE_URL=http://localhost:3001` in `.env.local`. If it points to the deployed URL, local calls hit prod.
+- Avoid running local scheduler while deployed cron is active to prevent clashes/rate limiting; keep only one scheduler active when testing.
 
 

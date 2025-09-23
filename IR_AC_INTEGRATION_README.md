@@ -131,3 +131,17 @@ Notes:
   - Use a hardware sensor (e.g., smart energy plug or temperature sensor) to infer ON state: adds hardware and complexity.
 
 
+## 13) Optional: DIY/Learned Remote for “Power-only”
+
+If you want to reproduce your physical remote’s Power exactly (to avoid presets) you can create a DIY/Learned remote and use its learned Power key:
+
+- In Tuya/Smart Life app → IR blaster → add new remote → choose DIY/Study → Air Conditioner.
+- Learn just the Power button from your physical remote, save as “Power” (and optionally learn a separate “Power Off” if your remote has distinct keys).
+- In API Explorer, list remotes for your IR blaster to get the new `remote_id` (it will differ from the brand-library one).
+- List keys for that DIY `remote_id`, note the learned Power `key_id`.
+- Send via RAW/Key-send endpoint using that DIY `remote_id` + `key_id` to trigger “Power-only”.
+
+Notes:
+- If your physical Power is a toggle, the learned key will also toggle (not guaranteed on-only).
+- Keep using the scenes endpoint when you need explicit mode/temp/fan; DIY Power is best when you only want to reproduce the original Power behavior.
+

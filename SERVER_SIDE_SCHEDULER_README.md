@@ -150,6 +150,23 @@ const url = endpoint.startsWith('?')
 7. **Don't assume data location** - Dual storage systems (localStorage + server storage) can cause confusion
 8. **Debug systematically** - Check actual data sources instead of making assumptions
 
+## Cron/Scheduler pitfalls and alert noise (pre-AC failures)
+
+Context: Before AC integration, we received “fail” emails even though devices often toggled correctly. These were mostly transient issues or config mismatches that didn’t warrant alarms.
+
+- Common transient causes:
+  - Brief 5xx/timeouts from host or Tuya that succeed on a subsequent attempt
+  - Serverless time limits causing early alerts while the action completes later
+  - External cron frequency drift (hourly vs every minute)
+  - Base URL/env mismatch, calling localhost from deployed or vice‑versa
+- Mitigations (no external knobs required):
+  - Add bounded retries with jittered backoff inside the scheduler, and alert only after final failure
+  - Slightly increase our own fetch timeout (below platform cap), classify timeouts separately
+  - Include status code and response body in alerts, plus a correlation/job ID across retries
+  - Ensure exactly one scheduler is active (don’t run local and deployed cron simultaneously)
+  - Verify cron URL and frequency first: endpoint must be `/api/cron`, schedule `* * * * *`
+  - Route all server calls through the deployed base URL in production; never use relative URLs from server
+
 ## Current Status
 
 ❌ **Server-side scheduling is NOT working**  
