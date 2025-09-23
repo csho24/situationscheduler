@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Calendar, Settings, Laptop, Edit, Plus, Lightbulb, Usb, Power } from 'lucide-react';
+import { Calendar, Settings, Laptop, Edit, Plus, Lightbulb, Usb, Power, Wind } from 'lucide-react';
 import CalendarComponent from '@/components/Calendar';
 import ScheduleEditor from '@/components/ScheduleEditor';
 // import dynamic from 'next/dynamic';
@@ -17,7 +17,8 @@ import { startLocalScheduler, stopLocalScheduler } from '@/lib/local-scheduler';
 const DEVICES = [
   { id: 'a3e31a88528a6efc15yf4o', name: 'Lights', app: 'Smart Life', icon: Lightbulb },
   { id: 'a34b0f81d957d06e4aojr1', name: 'Laptop', app: 'Smart Life', icon: Laptop },
-  { id: 'a3240659645e83dcfdtng7', name: 'USB Hub', app: 'Smart Life', icon: Usb }
+  { id: 'a3240659645e83dcfdtng7', name: 'USB Hub', app: 'Smart Life', icon: Usb },
+  { id: 'a3cf493448182afaa9rlgw', name: 'Aircon', app: 'Smart Life', icon: Wind }
 ];
 
 function DeviceControl({ device, deviceStates, setDeviceStates, deviceStatesInitialized }: { 
@@ -39,7 +40,7 @@ function DeviceControl({ device, deviceStates, setDeviceStates, deviceStatesInit
       // Extract the switch status from the response
       let isOn = false;
       if (status.result && (status.result as { status?: Array<{ code: string; value: boolean }> }).status) {
-        const switchStatus = (status.result as { status: Array<{ code: string; value: boolean }> }).status.find((item: { code: string; value: boolean }) => item.code === 'switch_1');
+        const switchStatus = (status.result as { status: Array<{ code: string; value: boolean }> }).status.find((item: { code: string; value: boolean }) => item.code === 'switch_1' || item.code === 'switch');
         isOn = switchStatus ? Boolean(switchStatus.value) : false;
       }
       
@@ -306,8 +307,7 @@ export default function Home() {
           // Extract the switch status from the response
           let isOn = false;
           if (status.result && (status.result as { status?: Array<{ code: string; value: boolean }> }).status) {
-            // Look for switch_1 in the status array
-            const switchStatus = (status.result as { status: Array<{ code: string; value: boolean }> }).status.find((item: { code: string; value: boolean }) => item.code === 'switch_1');
+            const switchStatus = (status.result as { status: Array<{ code: string; value: boolean }> }).status.find((item: { code: string; value: boolean }) => item.code === 'switch_1' || item.code === 'switch');
             isOn = switchStatus ? Boolean(switchStatus.value) : false;
           }
           

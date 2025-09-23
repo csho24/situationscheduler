@@ -51,7 +51,8 @@ interface StorageData {
 export const DEVICES = [
   { id: 'a3e31a88528a6efc15yf4o', name: 'Lights' },
   { id: 'a34b0f81d957d06e4aojr1', name: 'Laptop' },
-  { id: 'a3240659645e83dcfdtng7', name: 'USB Hub' }
+  { id: 'a3240659645e83dcfdtng7', name: 'USB Hub' },
+  { id: 'a3cf493448182afaa9rlgw', name: 'Aircon' }
 ];
 
 // Storage file path (in tmp for serverless compatibility)

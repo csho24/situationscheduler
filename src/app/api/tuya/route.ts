@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle device control commands
-    if (action === 'switch_1') {
+    if (action === 'switch_1' || action === 'switch') {
       const commands = [{ code: action, value }];
       const response = await makeTuyaRequest('POST', `/v1.0/devices/${deviceId}/commands`, { commands });
       const responseText = await response.text();
@@ -191,9 +191,82 @@ export async function POST(request: NextRequest) {
           status: response.status 
         }, { status: 500 });
       }
-
+      
       const data = JSON.parse(responseText);
       return NextResponse.json(data);
+    }
+
+    // IR Aircon Power and setup sequence (standard command endpoint)
+    // Uses constants captured from user's IR remote binding
+    if (action === 'ir_power') {
+      const irDeviceId = '5810306084f3ebc188ed';
+      const remoteId = 'a3cf493448182afaa9rlgw';
+      const categoryId = 5;
+      const brandId = 2782;
+      const remoteIndex = 2997;
+      const keyId = 0;
+
+      // Helper to send a single standard command
+      const sendStandard = async (payload: Record<string, unknown>) => {
+        // Use v2.0 command endpoint as confirmed in Tuya Explorer
+        const path = `/v2.0/infrareds/${irDeviceId}/remotes/${remoteId}/command`;
+        const response = await makeTuyaRequest('POST', path, payload);
+        const responseText = await response.text();
+        console.log('IR standard command response:', response.status, responseText);
+        if (!response.ok) {
+          throw new Error(`IR command failed: ${response.status} ${responseText}`);
+        }
+        return JSON.parse(responseText);
+      };
+
+      const sendRaw = async (payload: Record<string, unknown>) => {
+        const path = `/v2.0/infrareds/${irDeviceId}/remotes/${remoteId}/raw/command`;
+        const response = await makeTuyaRequest('POST', path, payload);
+        const responseText = await response.text();
+        console.log('IR raw command response:', response.status, responseText);
+        if (!response.ok) {
+          throw new Error(`IR raw command failed: ${response.status} ${responseText}`);
+        }
+        return JSON.parse(responseText);
+      };
+
+      const sendScene = async (payload: Record<string, unknown>) => {
+        const path = `/v2.0/infrareds/${irDeviceId}/air-conditioners/${remoteId}/scenes/command`;
+        const response = await makeTuyaRequest('POST', path, payload);
+        const responseText = await response.text();
+        console.log('IR scene command response:', response.status, responseText);
+        if (!response.ok) {
+          throw new Error(`IR scene command failed: ${response.status} ${responseText}`);
+        }
+        return JSON.parse(responseText);
+      };
+
+      try {
+        if (value) {
+          // Combined-state: set power/mode/temp/wind in one call (cool, 27°C, fan 2)
+          const result = await sendScene({
+            power: 1,
+            mode: 0,
+            temp: 27,
+            wind: 2
+          });
+          return NextResponse.json(result);
+        } else {
+          const result = await sendStandard({
+            category_id: categoryId,
+            key: 'PowerOff',
+            key_id: keyId
+          });
+          return NextResponse.json(result);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return NextResponse.json({
+          error: 'Failed to send IR command(s)',
+          details: message,
+          status: 500,
+        }, { status: 500 });
+      }
     }
 
     // Handle timer creation
