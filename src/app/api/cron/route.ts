@@ -125,12 +125,15 @@ export async function GET() {
             // Use the same API endpoint as manual controls for consistency
             const baseUrl = process.env.NODE_ENV === 'production' ? 'https://situationscheduler.vercel.app' : 'http://localhost:3001';
             console.log(`🔌 ${device.name}: Making API call to turn ${schedule.action} at ${schedule.time}`);
+            // Use correct action for aircon device
+            const action = deviceId === 'a3cf493448182afaa9rlgw' ? 'ir_power' : 'switch_1';
+            
             const response = await fetch(`${baseUrl}/api/tuya`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 deviceId,
-                action: 'switch_1',
+                action,
                 value: schedule.action === 'on'
               })
             });

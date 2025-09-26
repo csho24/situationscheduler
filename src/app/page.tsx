@@ -65,16 +65,23 @@ function DeviceControl({ device, deviceStates, setDeviceStates, deviceStatesInit
     if (loading) return;
     setLoading(true);
     try {
-      if (isOn) {
-        await tuyaAPI.turnOff(device.id);
-        setDeviceStates(prev => ({ ...prev, [device.id]: false }));
+      // Special handling for aircon device
+      if (device.id === 'a3cf493448182afaa9rlgw') {
+        // Aircon uses ir_power action
+        await tuyaAPI.controlDevice(device.id, 'ir_power', !isOn);
+        setDeviceStates(prev => ({ ...prev, [device.id]: !isOn }));
       } else {
-        await tuyaAPI.turnOn(device.id);
-        setDeviceStates(prev => ({ ...prev, [device.id]: true }));
+        // Regular devices use switch_1
+        if (isOn) {
+          await tuyaAPI.turnOff(device.id);
+          setDeviceStates(prev => ({ ...prev, [device.id]: false }));
+        } else {
+          await tuyaAPI.turnOn(device.id);
+          setDeviceStates(prev => ({ ...prev, [device.id]: true }));
+        }
       }
       
-      // Set manual override for 60 minutes
-      await serverScheduler.setManualOverride(device.id, 60);
+      // Manual override removed - manual controls should work immediately
       
     } catch (error) {
       console.error('Error toggling device:', error);

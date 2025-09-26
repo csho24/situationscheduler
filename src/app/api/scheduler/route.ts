@@ -90,14 +90,23 @@ async function executeScheduleCheck() {
         
         console.log(`⚡ ${device.name} state mismatch: current=${currentState ? 'ON' : 'OFF'}, target=${targetState ? 'ON' : 'OFF'}`);
         
-        if (currentAction === 'on') {
-          await tuyaAPI.turnOn(device.id);
-          console.log(`✅ SERVER: Turned ON ${device.name} via schedule at ${actionTime}`);
-          executedActions.push(`${device.name} ON at ${actionTime}`);
+        // Use correct action for aircon device
+        if (device.id === 'a3cf493448182afaa9rlgw') {
+          // Aircon uses ir_power action
+          await tuyaAPI.controlDevice(device.id, 'ir_power', currentAction === 'on');
+          console.log(`✅ SERVER: Turned ${currentAction.toUpperCase()} ${device.name} via schedule at ${actionTime}`);
+          executedActions.push(`${device.name} ${currentAction.toUpperCase()} at ${actionTime}`);
         } else {
-          await tuyaAPI.turnOff(device.id);
-          console.log(`✅ SERVER: Turned OFF ${device.name} via schedule at ${actionTime}`);
-          executedActions.push(`${device.name} OFF at ${actionTime}`);
+          // Regular devices use turnOn/turnOff
+          if (currentAction === 'on') {
+            await tuyaAPI.turnOn(device.id);
+            console.log(`✅ SERVER: Turned ON ${device.name} via schedule at ${actionTime}`);
+            executedActions.push(`${device.name} ON at ${actionTime}`);
+          } else {
+            await tuyaAPI.turnOff(device.id);
+            console.log(`✅ SERVER: Turned OFF ${device.name} via schedule at ${actionTime}`);
+            executedActions.push(`${device.name} OFF at ${actionTime}`);
+          }
         }
         
         // Clear any manual override after successful scheduled action
