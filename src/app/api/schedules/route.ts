@@ -27,6 +27,15 @@ export async function GET(request: NextRequest) {
     
     if (overrideError) throw overrideError;
     
+    // Get interval mode state
+    const { data: intervalData, error: intervalError } = await supabase
+      .from('interval_mode')
+      .select('*')
+      .eq('device_id', 'a3cf493448182afaa9rlgw')
+      .maybeSingle();
+    
+    if (intervalError) throw intervalError;
+    
     // Transform data to match expected format
     const schedules: Record<string, { date: string; situation: string }> = {};
     calendarData?.forEach(assignment => {
@@ -62,7 +71,13 @@ export async function GET(request: NextRequest) {
       success: true,
       schedules,
       deviceSchedules,
-      manualOverrides
+      manualOverrides,
+      intervalMode: intervalData?.is_active || false,
+      intervalConfig: intervalData ? {
+        onDuration: intervalData.on_duration || 3,
+        intervalDuration: intervalData.interval_duration || 20,
+        startTime: intervalData.start_time
+      } : null
     });
     
   } catch (error) {
@@ -158,6 +173,32 @@ export async function POST(request: NextRequest) {
         
         if (error) throw error;
         console.log(`🔄 SERVER: Cleared manual override for ${deviceId}`);
+      }
+    } else if (type === 'interval_mode') {
+      // Update interval mode state
+      const { deviceId, isActive, onDuration, intervalDuration, startTime } = payload;
+      console.log(`🔄 SERVER: Saving interval mode - deviceId: ${deviceId}, isActive: ${isActive}`);
+      
+      if (deviceId && typeof isActive === 'boolean') {
+        const { data, error } = await supabase
+          .from('interval_mode')
+          .upsert({
+            device_id: deviceId,
+            is_active: isActive,
+            on_duration: onDuration || 3,
+            interval_duration: intervalDuration || 20,
+            start_time: startTime ? new Date(startTime).toISOString() : null,
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'device_id'
+          })
+          .select();
+        
+        if (error) {
+          console.error('❌ Supabase error:', error);
+          throw error;
+        }
+        console.log(`🔄 SERVER: Interval mode ${isActive ? 'enabled' : 'disabled'} for ${deviceId}`, data);
       }
     }
     

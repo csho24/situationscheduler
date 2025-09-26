@@ -107,7 +107,7 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
       <div className="flex items-center justify-between mb-6">
         <button
           onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+          className="p-2 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
         >
           <ChevronLeft size={20} />
         </button>
@@ -118,7 +118,7 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
         
         <button
           onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+          className="p-2 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
         >
           <ChevronRight size={20} />
         </button>
@@ -193,7 +193,7 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
             <div className="space-y-3">
               <button
                 onClick={() => handleSituationSelect('work')}
-                className="w-full p-4 bg-green-50 hover:bg-green-100 border-2 border-green-200 rounded-lg transition-colors flex items-center justify-center gap-3"
+                className="w-full p-4 bg-green-50 hover:bg-green-100 border-2 border-green-200 rounded-lg transition-colors flex items-center justify-center gap-3 cursor-pointer"
               >
                 <BriefcaseIcon size={20} className="text-green-600" />
                 <div className="font-medium text-green-800">Work Day</div>
@@ -201,7 +201,7 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
               
               <button
                 onClick={() => handleSituationSelect('rest')}
-                className="w-full p-4 bg-yellow-50 hover:bg-yellow-100 border-2 border-yellow-200 rounded-lg transition-colors flex items-center justify-center gap-3"
+                className="w-full p-4 bg-yellow-50 hover:bg-yellow-100 border-2 border-yellow-200 rounded-lg transition-colors flex items-center justify-center gap-3 cursor-pointer"
               >
                 <Coffee size={20} className="text-yellow-600" />
                 <div className="font-medium text-yellow-800">Rest Day</div>

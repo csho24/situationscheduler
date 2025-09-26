@@ -42,11 +42,24 @@ CREATE TABLE execution_log (
   error_message TEXT
 );
 
+-- 5. Interval mode table (track interval mode state for devices)
+CREATE TABLE interval_mode (
+  id SERIAL PRIMARY KEY,
+  device_id VARCHAR(50) NOT NULL UNIQUE,
+  is_active BOOLEAN DEFAULT FALSE,
+  on_duration INTEGER DEFAULT 3,
+  interval_duration INTEGER DEFAULT 20,
+  start_time TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Create indexes for better performance
 CREATE INDEX idx_calendar_assignments_date ON calendar_assignments(date);
 CREATE INDEX idx_device_schedules_device_situation ON device_schedules(device_id, situation);
 CREATE INDEX idx_manual_overrides_device_until ON manual_overrides(device_id, until_timestamp);
 CREATE INDEX idx_execution_log_device_executed ON execution_log(device_id, executed_at);
+CREATE INDEX idx_interval_mode_device ON interval_mode(device_id);
 
 -- Insert default template schedules for your devices
 -- Replace these device IDs with your actual device IDs

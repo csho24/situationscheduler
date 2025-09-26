@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, Settings, Laptop, Edit, Plus, Lightbulb, Usb, Power, Wind } from 'lucide-react';
 import CalendarComponent from '@/components/Calendar';
 import ScheduleEditor from '@/components/ScheduleEditor';
@@ -21,11 +21,17 @@ const DEVICES = [
   { id: 'a3cf493448182afaa9rlgw', name: 'Aircon', app: 'Smart Life', icon: Wind }
 ];
 
-function DeviceControl({ device, deviceStates, setDeviceStates, deviceStatesInitialized }: { 
+function DeviceControl({ device, deviceStates, setDeviceStates, deviceStatesInitialized, intervalMode, intervalCountdown, offCountdown, isOnPeriod, toggleIntervalMode, stopIntervalMode }: { 
   device: typeof DEVICES[0], 
   deviceStates: Record<string, boolean>,
   setDeviceStates: React.Dispatch<React.SetStateAction<Record<string, boolean>>>,
-  deviceStatesInitialized: boolean
+  deviceStatesInitialized: boolean,
+  intervalMode: boolean,
+  intervalCountdown: number,
+  offCountdown: number,
+  isOnPeriod: boolean,
+  toggleIntervalMode: () => void,
+  stopIntervalMode: () => void
 }) {
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -67,7 +73,14 @@ function DeviceControl({ device, deviceStates, setDeviceStates, deviceStatesInit
     try {
       // Special handling for aircon device
       if (device.id === 'a3cf493448182afaa9rlgw') {
-        // Aircon uses ir_power action
+        // Stop interval mode when manual control is used
+        if (intervalMode) {
+          await stopIntervalMode();
+          // Don't toggle the device state when stopping interval mode
+          // The stopIntervalMode function already turns off the aircon
+          return;
+        }
+        // Aircon uses ir_power action (only when NOT in interval mode)
         await tuyaAPI.controlDevice(device.id, 'ir_power', !isOn);
         setDeviceStates(prev => ({ ...prev, [device.id]: !isOn }));
       } else {
@@ -80,8 +93,6 @@ function DeviceControl({ device, deviceStates, setDeviceStates, deviceStatesInit
           setDeviceStates(prev => ({ ...prev, [device.id]: true }));
         }
       }
-      
-      // Manual override removed - manual controls should work immediately
       
     } catch (error) {
       console.error('Error toggling device:', error);
@@ -100,29 +111,58 @@ function DeviceControl({ device, deviceStates, setDeviceStates, deviceStatesInit
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-gray-800 truncate">{device.name}</div>
         <div className="text-xs text-gray-500 font-mono">{device.id}</div>
+        {/* Interval mode status for aircon only */}
+        {device.id === 'a3cf493448182afaa9rlgw' && intervalMode && (
+          <div className="text-xs text-blue-600 font-medium flex gap-4">
+            {isOnPeriod && (
+              <span>⏱️ ON: {Math.floor(intervalCountdown / 60)}:{(intervalCountdown % 60).toString().padStart(2, '0')}</span>
+            )}
+            {!isOnPeriod && (
+              <span>⏱️ OFF: {Math.floor(offCountdown / 60)}:{(offCountdown % 60).toString().padStart(2, '0')}</span>
+            )}
+          </div>
+        )}
       </div>
       
-      {/* Toggle Switch */}
-      <button
-        onClick={toggleDevice}
-        disabled={loading}
-        className={`
-          relative inline-flex h-5 w-9 items-center rounded-full transition-colors
-          ${loading 
-            ? 'bg-gray-300 cursor-not-allowed' 
-            : isOn 
-            ? 'bg-green-600' 
-            : 'bg-gray-200'
-          }
-        `}
-      >
-        <span
+      <div className="flex items-center gap-2">
+        {/* Interval Mode Toggle (Aircon only) */}
+        {device.id === 'a3cf493448182afaa9rlgw' && (
+          <button
+            onClick={toggleIntervalMode}
+            className={`
+              px-3 py-1 text-xs rounded-full transition-colors
+              ${intervalMode 
+                ? 'bg-blue-600 text-white' 
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }
+            `}
+          >
+            {intervalMode ? 'Stop Interval' : 'Interval Mode'}
+          </button>
+        )}
+        
+        {/* Toggle Switch */}
+        <button
+          onClick={toggleDevice}
+          disabled={loading}
           className={`
-            inline-block h-3 w-3 transform rounded-full bg-white transition-transform
-            ${isOn ? 'translate-x-5' : 'translate-x-1'}
+            relative inline-flex h-5 w-9 items-center rounded-full transition-colors
+            ${loading 
+              ? 'bg-gray-300 cursor-not-allowed' 
+              : isOn 
+              ? 'bg-green-600' 
+              : 'bg-gray-200'
+            }
           `}
-        />
-      </button>
+        >
+          <span
+            className={`
+              inline-block h-3 w-3 transform rounded-full bg-white transition-transform
+              ${isOn ? 'translate-x-5' : 'translate-x-1'}
+            `}
+          />
+        </button>
+      </div>
     </div>
   );
 }
@@ -247,6 +287,273 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [customSchedules, setCustomSchedules] = useState(() => serverScheduler.getCustomSchedules());
   const [isLoadingSchedules, setIsLoadingSchedules] = useState(true);
+  
+  // Interval mode state for aircon (shared across pages)
+  const [intervalMode, setIntervalMode] = useState(false);
+  const [intervalCountdown, setIntervalCountdown] = useState(0);
+  const [offCountdown, setOffCountdown] = useState(0);
+  const [isOnPeriod, setIsOnPeriod] = useState(true);
+  const [showIntervalConfig, setShowIntervalConfig] = useState(false);
+  const [onDuration, setOnDuration] = useState(3);
+  const [intervalDuration, setIntervalDuration] = useState(20);
+  const [intervalStartTime, setIntervalStartTime] = useState<number | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastCommandTime = useRef<number>(0);
+
+  // Save interval mode state to Supabase
+  const saveIntervalModeState = async (isActive: boolean, onDur?: number, intervalDur?: number, startTime?: number) => {
+    try {
+      const response = await fetch('/api/schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'interval_mode',
+          deviceId: 'a3cf493448182afaa9rlgw',
+          isActive: isActive,
+          onDuration: onDur !== undefined ? onDur : onDuration,
+          intervalDuration: intervalDur !== undefined ? intervalDur : intervalDuration,
+          startTime: startTime
+        })
+      });
+      if (!response.ok) {
+        console.error('Failed to save interval mode state');
+      } else {
+        console.log(`💾 Saved interval config: ON=${onDur || onDuration}min, OFF=${intervalDur || intervalDuration}min, Active=${isActive}`);
+      }
+    } catch (error) {
+      console.error('Error saving interval mode state:', error);
+    }
+  };
+
+  // Save just the configuration (without starting interval mode)
+  const saveIntervalConfig = async (onDur: number, intervalDur: number) => {
+    await saveIntervalModeState(intervalMode, onDur, intervalDur, intervalStartTime || undefined);
+  };
+
+  // Load interval mode state from Supabase
+  const loadIntervalModeState = async () => {
+    try {
+      const response = await fetch('/api/schedules');
+      const data = await response.json();
+      if (data.success && data.intervalMode !== undefined) {
+        setIntervalMode(data.intervalMode);
+        
+        // Load user's configuration if available
+        if (data.intervalConfig) {
+          setOnDuration(data.intervalConfig.onDuration || 3);
+          setIntervalDuration(data.intervalConfig.intervalDuration || 20);
+          
+          if (data.intervalMode && data.intervalConfig.startTime) {
+            // If interval mode was active, keep config open and resume
+            setShowIntervalConfig(true);
+            const startTime = new Date(data.intervalConfig.startTime).getTime();
+            setIntervalStartTime(startTime);
+            
+            // Resume immediately with the loaded start time
+            setTimeout(() => {
+              resumeIntervalModeWithStartTime(startTime, data.intervalConfig.onDuration || 3, data.intervalConfig.intervalDuration || 20);
+            }, 100);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error loading interval mode state:', error);
+    }
+  };
+
+  // Interval mode functions for aircon
+  const toggleIntervalMode = async () => {
+    if (intervalMode) {
+      stopIntervalMode();
+    } else {
+      startIntervalMode();
+    }
+  };
+
+  const startIntervalMode = async () => {
+    // Clear any existing intervals first to prevent overlap
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    
+    setIntervalMode(true);
+    const startTime = Date.now();
+    setIntervalStartTime(startTime);
+    await saveIntervalModeState(true, onDuration, intervalDuration, startTime);
+    
+    console.log(`🔄 Interval mode started: ON for ${onDuration}min, OFF for ${intervalDuration}min`);
+    
+    // Start the cycle: Turn ON immediately, start ON period
+    await tuyaAPI.controlDevice('a3cf493448182afaa9rlgw', 'ir_power', true);
+    setIsOnPeriod(true);
+    setIntervalCountdown(onDuration * 60); // Start 3min timer
+    setOffCountdown(0); // Hide OFF timer
+    
+    // Single timer approach - no overlapping cycles
+    let currentPeriod = 'ON';
+    
+    intervalRef.current = setInterval(() => {
+      if (currentPeriod === 'ON') {
+        // Currently ON period - count down ON timer
+        setIntervalCountdown(prev => {
+          if (prev <= 1) {
+            const now = Date.now();
+            // Only execute if more than 3 seconds have passed since last command
+            if (now - lastCommandTime.current > 3000) {
+              lastCommandTime.current = now;
+              console.log('🔄 3min ON period done, switching to OFF period');
+              tuyaAPI.controlDevice('a3cf493448182afaa9rlgw', 'ir_power', false);
+              currentPeriod = 'OFF';
+              setIsOnPeriod(false);
+              setOffCountdown(intervalDuration * 60); // Start 20min timer
+              setIntervalCountdown(0); // Hide ON timer
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
+      } else {
+        // Currently OFF period - count down OFF timer
+        setOffCountdown(prev => {
+          if (prev <= 1) {
+            const now = Date.now();
+            // Only execute if more than 3 seconds have passed since last command
+            if (now - lastCommandTime.current > 3000) {
+              lastCommandTime.current = now;
+              console.log('🔄 20min OFF period done, switching to ON period');
+              tuyaAPI.controlDevice('a3cf493448182afaa9rlgw', 'ir_power', true);
+              currentPeriod = 'ON';
+              setIsOnPeriod(true);
+              setIntervalCountdown(onDuration * 60); // Start 3min timer
+              setOffCountdown(0); // Hide OFF timer
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
+      }
+    }, 1000);
+  };
+
+  const stopIntervalMode = async () => {
+    // Clear the interval FIRST to prevent any more timer fires
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    
+    setIntervalMode(false);
+    setIntervalCountdown(0);
+    setOffCountdown(0);
+    setIsOnPeriod(true);
+    setIntervalStartTime(null);
+    await saveIntervalModeState(false);
+    
+    // Turn off aircon when stopping
+    await tuyaAPI.controlDevice('a3cf493448182afaa9rlgw', 'ir_power', false);
+    
+    // Update device state to reflect OFF
+    setDeviceStates(prev => ({ ...prev, 'a3cf493448182afaa9rlgw': false }));
+  };
+
+  // Resume interval mode after page refresh with explicit start time
+  const resumeIntervalModeWithStartTime = (startTime: number, onDur: number, intervalDur: number) => {
+    const now = Date.now();
+    const elapsed = Math.floor((now - startTime) / 1000); // seconds elapsed
+    const totalCycleTime = (onDur + intervalDur) * 60; // total cycle time in seconds
+    const cyclePosition = elapsed % totalCycleTime; // where we are in the current cycle
+    
+    console.log(`🔄 Resuming interval mode: ${elapsed}s elapsed, cycle position: ${cyclePosition}s`);
+    
+    // Single timer approach - same as startIntervalMode
+    let currentPeriod = 'ON';
+    
+    if (cyclePosition < onDur * 60) {
+      // We're in the ON period
+      const remainingOnTime = (onDur * 60) - cyclePosition;
+      setIntervalCountdown(remainingOnTime);
+      setIsOnPeriod(true);
+      setOffCountdown(0);
+      currentPeriod = 'ON';
+      console.log(`🔄 In ON period, ${remainingOnTime}s remaining`);
+    } else {
+      // We're in the OFF period
+      const remainingOffTime = (intervalDur * 60) - (cyclePosition - onDur * 60);
+      setOffCountdown(remainingOffTime);
+      setIsOnPeriod(false);
+      setIntervalCountdown(0);
+      currentPeriod = 'OFF';
+      console.log(`🔄 In OFF period, ${remainingOffTime}s remaining`);
+    }
+    
+    // Start the single timer that switches between periods
+    intervalRef.current = setInterval(() => {
+      if (currentPeriod === 'ON') {
+        // Currently ON period - count down ON timer
+        setIntervalCountdown(prev => {
+          if (prev <= 1) {
+            const now = Date.now();
+            if (now - lastCommandTime.current > 3000) {
+              lastCommandTime.current = now;
+              console.log('🔄 3min ON period done, switching to OFF period');
+              tuyaAPI.controlDevice('a3cf493448182afaa9rlgw', 'ir_power', false);
+              currentPeriod = 'OFF';
+              setIsOnPeriod(false);
+              setOffCountdown(intervalDur * 60); // Start 20min timer
+              setIntervalCountdown(0); // Hide ON timer
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
+      } else {
+        // Currently OFF period - count down OFF timer
+        setOffCountdown(prev => {
+          if (prev <= 1) {
+            const now = Date.now();
+            if (now - lastCommandTime.current > 3000) {
+              lastCommandTime.current = now;
+              console.log('🔄 20min OFF period done, switching to ON period');
+              tuyaAPI.controlDevice('a3cf493448182afaa9rlgw', 'ir_power', true);
+              currentPeriod = 'ON';
+              setIsOnPeriod(true);
+              setIntervalCountdown(onDur * 60); // Start 3min timer
+              setOffCountdown(0); // Hide OFF timer
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
+      }
+    }, 1000);
+  };
+
+  // Resume interval mode after page refresh
+  const resumeIntervalMode = () => {
+    if (!intervalStartTime) return;
+    resumeIntervalModeWithStartTime(intervalStartTime, onDuration, intervalDuration);
+  };
+
+  // Cleanup interval mode on unmount
+  React.useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, []);
+
+  // Load interval mode state on mount and clear any existing intervals
+  React.useEffect(() => {
+    // Clear any existing intervals first
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    
+    loadIntervalModeState();
+  }, []);
 
   // Load data directly from API on mount - bypass server scheduler
   React.useEffect(() => {
@@ -587,12 +894,18 @@ export default function Home() {
               </div>
               <div className="space-y-3">
                 {DEVICES.map((device) => (
-                  <DeviceControl 
-                    key={device.id} 
-                    device={device} 
+                  <DeviceControl
+                    key={device.id}
+                    device={device}
                     deviceStates={deviceStates}
                     setDeviceStates={setDeviceStates}
                     deviceStatesInitialized={deviceStatesInitialized}
+                    intervalMode={intervalMode}
+                    intervalCountdown={intervalCountdown}
+                    offCountdown={offCountdown}
+                    isOnPeriod={isOnPeriod}
+                    toggleIntervalMode={toggleIntervalMode}
+                    stopIntervalMode={stopIntervalMode}
                   />
                 ))}
               </div>
@@ -624,6 +937,93 @@ export default function Home() {
                 ))}
               </select>
             </div>
+            
+            {/* Interval Mode for Aircon */}
+            {selectedDevice.id === 'a3cf493448182afaa9rlgw' && (
+              <div className="max-w-lg mx-auto">
+                <div 
+                  className="bg-blue-50 border border-blue-200 rounded-lg p-4 cursor-pointer hover:bg-blue-100 transition-colors"
+                  onClick={() => setShowIntervalConfig(!showIntervalConfig)}
+                >
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-medium text-blue-900">Interval Mode</h3>
+                      </div>
+                      {showIntervalConfig && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleIntervalMode();
+                          }}
+                          className={`
+                            px-4 py-2 text-sm rounded-full transition-colors
+                            ${intervalMode 
+                              ? 'bg-red-600 text-white hover:bg-red-700' 
+                              : 'bg-blue-600 text-white hover:bg-blue-700'
+                            }
+                          `}
+                        >
+                          {intervalMode ? 'Stop Interval' : 'Start Interval'}
+                        </button>
+                      )}
+                    </div>
+                    
+                    {showIntervalConfig && (
+                      <div className="space-y-3">
+                        <div className="text-sm text-black font-medium">
+                          Switch ON for: <input 
+                            type="text" 
+                            value={onDuration} 
+                            onChange={async (e) => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d+$/.test(val)) {
+                                const newValue = val === '' ? 1 : Number(val);
+                                setOnDuration(newValue);
+                                // Auto-save to Supabase when user changes the value
+                                await saveIntervalConfig(newValue, intervalDuration);
+                              }
+                            }} 
+                            disabled={intervalMode} 
+                            className="w-16 px-1 py-0.5 text-lg border-b-2 border-blue-400 bg-transparent text-center font-bold text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            onFocus={(e) => e.target.select()}
+                            onClick={(e) => e.stopPropagation()}
+                          /> mins, then Switch OFF for: <input 
+                            type="text" 
+                            value={intervalDuration} 
+                            onChange={async (e) => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d+$/.test(val)) {
+                                const newValue = val === '' ? 5 : Number(val);
+                                setIntervalDuration(newValue);
+                                // Auto-save to Supabase when user changes the value
+                                await saveIntervalConfig(onDuration, newValue);
+                              }
+                            }} 
+                            disabled={intervalMode} 
+                            className="w-16 px-1 py-0.5 text-lg border-b-2 border-blue-400 bg-transparent text-center font-bold text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            onFocus={(e) => e.target.select()}
+                            onClick={(e) => e.stopPropagation()}
+                          /> mins
+                        </div>
+                        
+                        {/* Timer display on settings page */}
+                        {intervalMode && (
+                          <div className="text-sm text-blue-600 font-medium bg-blue-50 px-3 py-2 rounded flex gap-4">
+                            {isOnPeriod && (
+                              <span>⏱️ ON Timer: {Math.floor(intervalCountdown / 60)}:{(intervalCountdown % 60).toString().padStart(2, '0')}</span>
+                            )}
+                            {!isOnPeriod && (
+                              <span>⏱️ OFF Timer: {Math.floor(offCountdown / 60)}:{(offCountdown % 60).toString().padStart(2, '0')}</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
             
             <div className="max-w-lg mx-auto space-y-6">
               {/* Work Day Schedule */}
