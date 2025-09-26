@@ -70,7 +70,7 @@ export class ServerScheduler {
   // Sync device schedules to server
   async syncToServer(): Promise<void> {
     // DISABLED - no sync to prevent data overwrites in deployed version
-    console.log(`🚫 syncToServer() disabled - deployed version is READ-ONLY`);
+    console.log(`syncToServer() disabled - deployed version is READ-ONLY`);
   }
 
   // No localStorage - use Supabase only
