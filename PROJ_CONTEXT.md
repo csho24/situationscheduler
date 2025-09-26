@@ -77,3 +77,10 @@ This app solves the problem of inconsistent work schedules where traditional fix
 - Avoid running local scheduler while deployed cron is active to prevent clashes/rate limiting; keep only one scheduler active when testing.
 
 
+### 24 Sep 2025 – Deploy note (monorepo root)
+- Observation: Pushes to GitHub did not auto-deploy UI changes on Vercel; manual redeploy showed “Unexpected error”.
+- Likely cause: Vercel building repo root instead of app subfolder.
+- Action items for future:
+  - During (re)import on Vercel, choose project Root Directory = `plug-scheduler`.
+  - If the UI does not expose Root Directory, re-link the repo and pick `plug-scheduler` at import time.
+  - Optional safeguard: add a root-level `vercel.json` in the repo (outside this folder) to pin `plug-scheduler` as the build root.

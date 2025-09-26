@@ -69,7 +69,21 @@ export async function GET() {
     // Get today's situation from the API response
     const schedules = data.schedules || {};
     const todaySchedule = schedules[today];
-    const situation = todaySchedule?.situation || 'rest';
+    const situation = todaySchedule?.situation;
+    
+    // If no day is assigned, don't run any schedules
+    if (!situation) {
+      console.log(`📅 No day assigned for today (${today}) - no schedules will run`);
+      return NextResponse.json({
+        success: true,
+        message: 'No day assigned - no schedules executed',
+        result: {
+          date: today,
+          situation: 'none',
+          executed: []
+        }
+      });
+    }
     
     console.log(`📋 Today's schedule: ${situation} day`);
     

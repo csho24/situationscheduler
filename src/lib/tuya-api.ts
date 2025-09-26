@@ -57,37 +57,22 @@ export class TuyaAPI {
     console.log(`📍 Call source: ${new Error().stack?.split('\n')[2]?.trim()}`); // Just show immediate caller
     
     const body = { deviceId, action, value };
-    // First attempt as provided (e.g., switch_1)
-    let response = await this.makeRequest('POST', '', body);
-    if (response.success) {
-      return true;
+    
+    const response = await this.makeRequest('POST', '', body);
+    
+    if (!response.success) {
+      throw new Error(`Failed to control device: ${response.msg}`);
     }
-    // Fallback for devices that use generic 'switch' code (e.g., some IR/virtual devices)
-    if (action === 'switch_1') {
-      const fallbackBody = { deviceId, action: 'switch', value };
-      response = await this.makeRequest('POST', '', fallbackBody);
-      if (response.success) {
-        return true;
-      }
-    }
-    throw new Error(`Failed to control device: ${response.msg}`);
+    
+    return true;
   }
 
   async turnOn(deviceId: string): Promise<boolean> {
-    // Special case: Aircon via IR blaster uses IR power command
-    if (deviceId === 'a3cf493448182afaa9rlgw') {
-      const result = this.controlDevice(deviceId, 'ir_power', true);
-      return result;
-    }
     const result = this.controlDevice(deviceId, 'switch_1', true);
     return result;
   }
 
   async turnOff(deviceId: string): Promise<boolean> {
-    if (deviceId === 'a3cf493448182afaa9rlgw') {
-      const result = this.controlDevice(deviceId, 'ir_power', false);
-      return result;
-    }
     const result = this.controlDevice(deviceId, 'switch_1', false);
     return result;
   }
