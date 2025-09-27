@@ -112,15 +112,19 @@ export async function POST(request: NextRequest) {
     } else if (type === 'devices') {
       // Update device schedules
       if (payload.deviceSchedules) {
-        // Clear existing schedules for all devices
-        const { error: deleteError } = await supabase
-          .from('device_schedules')
-          .delete()
-          .neq('id', 0); // Delete all records
+        // First, delete all schedules for devices that are being updated
+        const deviceIds = Object.keys(payload.deviceSchedules);
+        if (deviceIds.length > 0) {
+          const { error: deleteError } = await supabase
+            .from('device_schedules')
+            .delete()
+            .in('device_id', deviceIds);
+          
+          if (deleteError) throw deleteError;
+          console.log(`🗑️ SERVER: Deleted existing schedules for devices: ${deviceIds.join(', ')}`);
+        }
         
-        if (deleteError) throw deleteError;
-        
-        // Insert new schedules
+        // Then, insert the new schedules
         const schedulesToInsert = [];
         for (const [deviceId, deviceSchedules] of Object.entries(payload.deviceSchedules)) {
           for (const [situation, schedules] of Object.entries(deviceSchedules as Record<string, Array<{time: string; action: string}>>)) {
@@ -141,9 +145,10 @@ export async function POST(request: NextRequest) {
             .insert(schedulesToInsert);
           
           if (insertError) throw insertError;
+          console.log(`📋 SERVER: Inserted ${schedulesToInsert.length} new schedules`);
         }
         
-        console.log(`📋 SERVER: Updated device schedules for all devices`);
+        console.log(`📋 SERVER: Updated device schedules for devices: ${deviceIds.join(', ')}`);
       }
     } else if (type === 'manual-override') {
       // Set manual override

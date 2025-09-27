@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { tuyaAPI } from '@/lib/tuya-api';
-import { loadStorage, updateLastExecutedEvent, clearManualOverride, DEVICES } from '@/lib/persistent-storage';
+import { DEVICES } from '@/lib/persistent-storage';
+import { supabase } from '@/lib/supabase';
 
 async function executeScheduleCheck() {
   const now = new Date();
@@ -10,27 +11,70 @@ async function executeScheduleCheck() {
   console.log(`🔍 SERVER SCHEDULE CHECK at ${now.toLocaleTimeString()} (${currentTime} minutes)`);
   console.log(`🔍 DEBUG: Looking for date: ${today}`);
   
-  // Load fresh data from persistent storage
-  const storage = loadStorage();
+  // Load calendar assignments from Supabase
+  const { data: calendarData, error: calendarError } = await supabase
+    .from('calendar_assignments')
+    .select('*');
   
-  console.log(`🔍 DEBUG: Available schedules:`, Object.keys(storage.scheduleStorage));
-  console.log(`🔍 DEBUG: Full schedule storage:`, storage.scheduleStorage);
+  if (calendarError) {
+    console.error('❌ Failed to load calendar assignments:', calendarError);
+    return { message: 'Failed to load calendar data', executed: [], error: calendarError.message };
+  }
+  
+  // Convert to the expected format
+  const scheduleStorage: Record<string, { date: string; situation: string }> = {};
+  calendarData?.forEach(assignment => {
+    scheduleStorage[assignment.date] = {
+      date: assignment.date,
+      situation: assignment.situation
+    };
+  });
+  
+  console.log(`📅 Loaded ${calendarData?.length || 0} calendar assignments from Supabase`);
+  console.log(`🔍 DEBUG: Available schedules:`, Object.keys(scheduleStorage));
   
   // Get today's schedule assignment
-  const todaySchedule = storage.scheduleStorage[today];
+  const todaySchedule = scheduleStorage[today];
   if (!todaySchedule) {
     console.log(`📅 No schedule assigned for today (${today})`);
-    console.log(`📅 Available dates: ${Object.keys(storage.scheduleStorage).join(', ')}`);
-    return { message: `No schedule for today (${today})`, executed: [], availableDates: Object.keys(storage.scheduleStorage) };
+    console.log(`📅 Available dates: ${Object.keys(scheduleStorage).join(', ')}`);
+    return { message: `No schedule for today (${today})`, executed: [], availableDates: Object.keys(scheduleStorage) };
   }
   
   console.log(`📋 Today's schedule: ${todaySchedule.situation} day`);
+  
+  // Load device schedules from Supabase
+  const { data: deviceScheduleData, error: deviceError } = await supabase
+    .from('device_schedules')
+    .select('*');
+  
+  if (deviceError) {
+    console.error('❌ Failed to load device schedules:', deviceError);
+    return { message: 'Failed to load device schedules', executed: [], error: deviceError.message };
+  }
+  
+  // Convert to the expected format
+  const deviceSchedules: Record<string, Record<string, Array<{time: string; action: string}>>> = {};
+  deviceScheduleData?.forEach(schedule => {
+    if (!deviceSchedules[schedule.device_id]) {
+      deviceSchedules[schedule.device_id] = {};
+    }
+    if (!deviceSchedules[schedule.device_id][schedule.situation]) {
+      deviceSchedules[schedule.device_id][schedule.situation] = [];
+    }
+    deviceSchedules[schedule.device_id][schedule.situation].push({
+      time: schedule.time,
+      action: schedule.action
+    });
+  });
+  
+  console.log(`📋 Loaded device schedules for ${Object.keys(deviceSchedules).length} devices from Supabase`);
   
   const executedActions: string[] = [];
   
   // Check each device's schedule
   for (const device of DEVICES) {
-    const deviceSchedule = storage.deviceSchedules[device.id];
+    const deviceSchedule = deviceSchedules[device.id];
     if (!deviceSchedule || !deviceSchedule[todaySchedule.situation]) {
       console.log(`📅 No ${todaySchedule.situation} schedule for ${device.name}`);
       continue;
@@ -60,19 +104,12 @@ async function executeScheduleCheck() {
       
       // Only execute events happening RIGHT NOW (within last minute)
       if (entryTime <= currentTime && entryTime > (currentTime - 1)) {
-        // Check if we've already executed this exact event today
-        const eventKey = `${device.id}-${entry.time}-${entry.action}-${today}`;
-        const lastExecuted = storage.lastExecutedEvents[eventKey];
-        
-        if (!lastExecuted || (Date.now() - lastExecuted) > 60000) {
-          currentAction = entry.action;
-          actionTime = entry.time;
-          updateLastExecutedEvent(eventKey, Date.now());
-          console.log(`⚡ ${device.name} EXECUTING NOW: ${entry.action} at ${entry.time} (fresh event)`);
-          break;
-        } else {
-          console.log(`⏭️ ${device.name} event ${entry.time} ${entry.action} already executed today`);
-        }
+        // For now, execute all events that should happen now (within the last minute)
+        // TODO: Implement proper last executed tracking in Supabase if needed
+        currentAction = entry.action;
+        actionTime = entry.time;
+        console.log(`⚡ ${device.name} EXECUTING NOW: ${entry.action} at ${entry.time}`);
+        break;
       }
     }
     
@@ -109,11 +146,8 @@ async function executeScheduleCheck() {
           }
         }
         
-        // Clear any manual override after successful scheduled action
-        if (storage.manualOverrides[device.id]) {
-          clearManualOverride(device.id);
-          console.log(`🔄 Cleared manual override for ${device.name} after scheduled action`);
-        }
+        // TODO: Clear manual override in Supabase after successful scheduled action
+        // For now, manual overrides are handled separately
         
       } catch (error) {
         console.error(`❌ Failed to execute schedule action for ${device.name}:`, error);

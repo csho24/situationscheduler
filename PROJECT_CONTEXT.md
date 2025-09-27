@@ -33,11 +33,24 @@ This document captures the current, factual setup of the project (no speculation
     - `calendar_assignments(date, situation)`
     - `device_schedules(device_id, situation, time, action)`
     - `manual_overrides(device_id, until_timestamp, set_at)`
+    - `interval_mode(device_id, is_active, on_duration, interval_duration, start_time)`
   - `GET /api/schedules` builds and returns:
     - `schedules` (calendar by date)
     - `deviceSchedules` (per device, by situation)
     - `manualOverrides`
+    - `intervalMode` (interval mode state and config)
   - `POST /api/schedules` upserts to the above tables (when invoked explicitly)
+
+### CRITICAL: Database Backup Requirements
+- **Supabase data is NOT in git** - database exists only in Supabase cloud
+- **Regular backups required** to prevent data loss
+- **Backup strategy needed** for all tables:
+  - `calendar_assignments` (work/rest day assignments)
+  - `device_schedules` (custom device schedules - most critical)
+  - `manual_overrides` (temporary automation blocks)
+  - `interval_mode` (aircon interval settings)
+- **Current backup**: `.tmp-scheduler-storage.json` (contains device schedules backup)
+- **Action needed**: Implement regular automated backups or manual backup procedures
 
 ### Scheduling mechanics (current code)
 - Localhost

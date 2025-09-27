@@ -367,3 +367,43 @@ if (entryTime <= currentTime && entryTime > (currentTime - 1)) {
 - Scheduler only executes fresh events, never "corrects" old ones
 
 **Lesson**: Sometimes the obvious solution is obvious - manual control should just work as expected.
+
+---
+
+## RELATED ISSUE: Schedule Deletion Pattern (September 27, 2025)
+
+### The Same Architectural Problem
+After fixing the refresh undo issue, we encountered **the exact same pattern** with schedule deletions:
+
+**Schedule Deletion Issue:**
+- **Problem**: Deleted schedules kept reappearing on page refresh
+- **Root Cause**: UPSERT operation ignored missing schedules instead of deleting them
+- **Pattern**: System not properly handling "absence" of data
+
+**Connection to Refresh Undo:**
+- **Refresh Undo**: System ignored manual control absence, kept reverting device state
+- **Schedule Deletion**: System ignored schedule absence, kept schedules in database
+- **Same Root Cause**: Both systems didn't properly handle when something should be "gone"
+
+### Technical Pattern
+**The UPSERT Problem:**
+```typescript
+// BROKEN: UPSERT only handles what's in the new data
+.upsert(schedulesToInsert, { onConflict: 'device_id,situation,time' })
+// Missing schedules stay in database - UPSERT ignores them
+```
+
+**The Fix Pattern:**
+```typescript
+// FIXED: DELETE + INSERT handles absences properly
+.delete().in('device_id', deviceIds)  // Remove all existing
+.insert(schedulesToInsert)            // Add only current data
+```
+
+### Key Learning
+**Both issues shared the same fundamental problem:**
+- Systems treating "absence" as "ignore" instead of "remove"
+- Database operations not properly handling deletions/removals
+- UI state changes not persisting because backend ignored missing data
+
+**This pattern will likely appear in other parts of the system where data can be removed.**
