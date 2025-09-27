@@ -243,12 +243,12 @@ export async function POST(request: NextRequest) {
 
       try {
         if (value) {
-          // Combined-state: set power/mode/temp/wind in one call (cool, 27°C, fan 3)
+          // Combined-state: set power/mode/temp/wind in one call (cool, 26°C, fan 2)
           const result = await sendScene({
             power: 1,
             mode: 0,
-            temp: 27,
-            wind: 3
+            temp: 26,
+            wind: 2
           });
           return NextResponse.json(result);
         } else {

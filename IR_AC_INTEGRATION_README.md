@@ -111,7 +111,7 @@ Notes:
 
 ## 11) Current app behavior
 
-- ON → scenes command (cool/27/fan3) - Updated Sep 27, 2025: Changed from fan2 to fan3 (high speed)
+- ON → scenes command (cool/27/fan2) - Original working setting
 - OFF → PowerOff (standard remotes path)
 - Aircon status polling returns empty `status` for `infrared_ac`; UI shows neutral on refresh and reflects user actions within the session.
 
@@ -131,7 +131,13 @@ Notes:
   - Use a hardware sensor (e.g., smart energy plug or temperature sensor) to infer ON state: adds hardware and complexity.
 
 
-## 13) Optional: DIY/Learned Remote for “Power-only”
+## 13) Configuration Changes Log
+
+- **Sep 27, 2025**: Changed default fan speed from `wind: 2` to `wind: 3` (high speed) - user found wind=2 too hot
+- **Sep 27, 2025**: Changed default temperature from `temp: 27` to `temp: 26` (1 degree cooler) - user requested better cooling
+- **Sep 27, 2025**: Reverted fan speed back to `wind: 2` (middle speed) - user found wind=3 too high/noisy, wind=1 too low
+
+## 14) Optional: DIY/Learned Remote for "Power-only"
 
 If you want to reproduce your physical remote’s Power exactly (to avoid presets) you can create a DIY/Learned remote and use its learned Power key:
 

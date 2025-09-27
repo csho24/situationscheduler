@@ -106,7 +106,7 @@ async function executeScheduleCheck() {
       if (entryTime <= currentTime && entryTime > (currentTime - 1)) {
         // For now, execute all events that should happen now (within the last minute)
         // TODO: Implement proper last executed tracking in Supabase if needed
-        currentAction = entry.action;
+        currentAction = entry.action as 'on' | 'off';
         actionTime = entry.time;
         console.log(`⚡ ${device.name} EXECUTING NOW: ${entry.action} at ${entry.time}`);
         break;
