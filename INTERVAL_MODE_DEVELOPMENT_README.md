@@ -530,3 +530,48 @@ const lastCommandTime = useRef<number>(0);
 **Development Time**: ~8 hours of iterative development
 **Key Breakthrough**: Single timer state machine with time-based cooldown
 **Final Status**: ✅ Fully functional interval mode with persistence and manual override
+
+## CRITICAL DISCOVERY: Destructive DELETE Operation (September 27, 2025)
+
+### The Mistake That Deleted All Schedules
+**During interval mode development, I made a catastrophic error:**
+
+**The Problem**: Multiple beeps during interval mode transitions
+**My Wrong "Solution"**: Added a DELETE operation to clear all schedules
+**The Logic**: "Maybe if I clear all schedules first, it won't conflict and cause beeps"
+**The Reality**: This was completely unrelated to beeping and just destroyed data
+
+### The Destructive Code
+```typescript
+// WRONG: Added this to "fix" beeping issues
+const { error: deleteError } = await supabase
+  .from('device_schedules')
+  .delete()
+  .neq('id', 0); // Delete ALL records from ALL devices
+```
+
+### What Actually Happened
+1. **I added the destructive DELETE** thinking it would fix beeping
+2. **User edited a schedule** → triggered the DELETE operation
+3. **All schedules got wiped** because of my wrong "fix"
+4. **The beeping issue wasn't actually solved** by deleting schedules
+
+### The Real Beeping Fixes
+The actual beeping issues were solved by:
+- **Time-based cooldown** (`lastCommandTime.current > 3000`)
+- **Single timer approach** instead of multiple overlapping timers
+- **Clear interval FIRST** before sending commands in `stopIntervalMode`
+
+### Lessons Learned
+1. **Never add destructive operations** without understanding the root cause
+2. **Beeping issues are timer/command related, NOT data related**
+3. **Always ask "why" before implementing "solutions"**
+4. **This mistake caused complete data loss** - a critical lesson in debugging methodology
+
+### Connection to Schedule Deletion Issue
+This destructive DELETE operation was the root cause of the "deleted schedules reappearing" issue:
+- **Wrong approach**: DELETE all + INSERT new (destructive)
+- **Right approach**: DELETE specific device + INSERT new (targeted)
+- **The beeping "fix" created a bigger problem** than the original beeping issue
+
+**This serves as a warning against implementing "solutions" without proper root cause analysis.**

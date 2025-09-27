@@ -111,7 +111,7 @@ Notes:
 
 ## 11) Current app behavior
 
-- ON → scenes command (cool/27/fan2)
+- ON → scenes command (cool/27/fan3) - Updated Sep 27, 2025: Changed from fan2 to fan3 (high speed)
 - OFF → PowerOff (standard remotes path)
 - Aircon status polling returns empty `status` for `infrared_ac`; UI shows neutral on refresh and reflects user actions within the session.
 
