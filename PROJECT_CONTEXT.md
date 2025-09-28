@@ -76,4 +76,12 @@ This document captures the current, factual setup of the project (no speculation
 - Having localhost open means it can also trigger scheduling (`POST /api/scheduler`) every 60 seconds while the page is open.
 - No additional persistence of execution history is implemented beyond console logs and optional `lastExecutedEvents` in server storage (for duplicate suppression on the server route).
 
+### Recent Major Changes (Sep 27, 2025)
+- **Data Loss Fix**: Fixed destructive code that was deleting schedules on every edit - see `DELETED_DEVICE_SCHEDULES_INVESTIGATION.md`
+- **Supabase Sync Fixes**: 
+  - Fixed cron job reading from old file instead of Supabase (calendar assignments not syncing)
+  - Fixed schedule deletion issue where deleted schedules kept reappearing
+  - Updated cron job to query Supabase directly instead of file-based storage
+- **Aircon Settings**: temp=26°C, wind=2 (middle speed) - see `IR_AC_INTEGRATION_README.md`
+
 

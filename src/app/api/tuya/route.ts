@@ -252,10 +252,12 @@ export async function POST(request: NextRequest) {
           });
           return NextResponse.json(result);
         } else {
-          const result = await sendStandard({
-            category_id: categoryId,
-            key: 'PowerOff',
-            key_id: keyId
+          // Use scene command for OFF as well to ensure consistency
+          const result = await sendScene({
+            power: 0,
+            mode: 0,
+            temp: 26,
+            wind: 2
           });
           return NextResponse.json(result);
         }
