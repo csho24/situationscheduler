@@ -1,5 +1,5 @@
--- Supabase Backup - September 27, 2025
--- Generated after major fixes: interval mode, data loss fix, calendar sync fix
+-- Supabase Backup - September 28, 2025 (13:00)
+-- Generated after cleanup of duplicate schedules and removal of old backup files
 
 -- Calendar Assignments
 INSERT INTO calendar_assignments (date, situation) VALUES

@@ -293,7 +293,7 @@ export default function Home() {
   const [intervalCountdown, setIntervalCountdown] = useState(0);
   const [offCountdown, setOffCountdown] = useState(0);
   const [isOnPeriod, setIsOnPeriod] = useState(true);
-  const [showIntervalConfig, setShowIntervalConfig] = useState(false);
+  const [showIntervalConfig, setShowIntervalConfig] = useState(true);
   const [onDuration, setOnDuration] = useState(3);
   const [intervalDuration, setIntervalDuration] = useState(20);
   const [intervalStartTime, setIntervalStartTime] = useState<number | null>(null);
@@ -948,25 +948,25 @@ export default function Home() {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-sm font-medium text-blue-900">Interval Mode</h3>
+                        <h3 className="text-base font-bold text-blue-900">
+                          Interval Mode
+                        </h3>
                       </div>
-                      {showIntervalConfig && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleIntervalMode();
-                          }}
-                          className={`
-                            px-4 py-2 text-sm rounded-full transition-colors
-                            ${intervalMode 
-                              ? 'bg-red-600 text-white hover:bg-red-700' 
-                              : 'bg-blue-600 text-white hover:bg-blue-700'
-                            }
-                          `}
-                        >
-                          {intervalMode ? 'Stop Interval' : 'Start Interval'}
-                        </button>
-                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleIntervalMode();
+                        }}
+                        className={`
+                          px-4 py-2 text-sm rounded-full transition-colors
+                          ${intervalMode 
+                            ? 'bg-red-600 text-white hover:bg-red-700' 
+                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                          }
+                        `}
+                      >
+                        {intervalMode ? 'Stop Interval' : 'Start Interval'}
+                      </button>
                     </div>
                     
                     {showIntervalConfig && (
@@ -1085,7 +1085,7 @@ export default function Home() {
                       });
                     }
                     
-                    return Array.isArray(workSchedule) ? workSchedule.map((entry, index) => (
+                    return Array.isArray(workSchedule) ? workSchedule.sort((a, b) => a.time.localeCompare(b.time)).map((entry, index) => (
                       <div key={index} className={`flex items-center gap-4 py-2 px-3 rounded-lg transition-colors ${
                         index === activeIndex && isActiveToday
                           ? 'bg-blue-50 border-2 border-blue-200' 
@@ -1162,7 +1162,7 @@ export default function Home() {
                       });
                     }
                     
-                    return Array.isArray(restSchedule) ? restSchedule.map((entry, index) => (
+                    return Array.isArray(restSchedule) ? restSchedule.sort((a, b) => a.time.localeCompare(b.time)).map((entry, index) => (
                       <div key={index} className={`flex items-center gap-4 py-2 px-3 rounded-lg transition-colors ${
                         index === activeIndex && isActiveToday
                           ? 'bg-blue-50 border-2 border-blue-200' 

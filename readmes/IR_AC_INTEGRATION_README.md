@@ -137,7 +137,31 @@ Notes:
 - **Sep 27, 2025**: Changed default temperature from `temp: 27` to `temp: 26` (1 degree cooler) - user requested better cooling
 - **Sep 27, 2025**: Reverted fan speed back to `wind: 2` (middle speed) - user found wind=3 too high/noisy, wind=1 too low
 
-## 14) Optional: DIY/Learned Remote for "Power-only"
+## 14) Interval Mode IR Command Sync Issues (Sep 28, 2025)
+
+**Issue Observed**: Interval mode OFF command sometimes fails - timer changes correctly but aircon stays ON (beeps but doesn't turn off).
+
+**Suspected Root Cause**: IR command sync issues between app and physical remote:
+- **Physical remote behavior**: Single toggle button - if app turns ON aircon, remote doesn't know the current state
+- **Sync process**: Requires double-press on physical remote (1st press does nothing because aircon is already ON, 2nd press turns OFF)
+- **Interval mode problem**: When OFF command fails, no opportunity to "double-press sync" since interval mode continues automatically
+
+**Current Implementation**:
+- **ON**: Scene command (`power: 1, mode: 0, temp: 26, wind: 2`)
+- **OFF**: PowerOff command (`category_id: 5, key: "PowerOff", key_id: 0`)
+
+**Notes**:
+- Issue appears to be intermittent/temporary (worked later in same session)
+- Suggests environmental factors (IR interference, timing, aircon responsiveness) rather than code issues
+- PowerOff command reliability may be lower than scene command
+- **Status**: Unconfirmed - requires more testing and observation
+
+**Potential Solutions** (untested):
+- Use scene command for OFF (`power: 0`) instead of PowerOff for consistency
+- Add retry logic for failed OFF commands
+- Implement "sync detection" to handle remote/app state mismatches
+
+## 15) Optional: DIY/Learned Remote for "Power-only"
 
 If you want to reproduce your physical remote’s Power exactly (to avoid presets) you can create a DIY/Learned remote and use its learned Power key:
 
