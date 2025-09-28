@@ -300,6 +300,31 @@ export default function Home() {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastCommandTime = useRef<number>(0);
 
+  // Update interval display based on server-side timing
+  const updateIntervalDisplay = () => {
+    if (!intervalStartTime) return;
+    
+    const now = Date.now();
+    const elapsedSeconds = Math.floor((now - intervalStartTime) / 1000);
+    const totalCycleTime = (onDuration + intervalDuration) * 60;
+    const cyclePosition = elapsedSeconds % totalCycleTime;
+    const onPeriodSeconds = onDuration * 60;
+    
+    if (cyclePosition < onPeriodSeconds) {
+      // ON period
+      const remaining = onPeriodSeconds - cyclePosition;
+      setIsOnPeriod(true);
+      setIntervalCountdown(remaining);
+      setOffCountdown(0);
+    } else {
+      // OFF period
+      const remaining = (onDuration + intervalDuration) * 60 - cyclePosition;
+      setIsOnPeriod(false);
+      setIntervalCountdown(0);
+      setOffCountdown(remaining);
+    }
+  };
+
   // Save interval mode state to Supabase
   const saveIntervalModeState = async (isActive: boolean, onDur?: number, intervalDur?: number, startTime?: number) => {
     try {
@@ -390,49 +415,9 @@ export default function Home() {
     setIntervalCountdown(onDuration * 60); // Start 3min timer
     setOffCountdown(0); // Hide OFF timer
     
-    // Single timer approach - no overlapping cycles
-    let currentPeriod = 'ON';
-    
+    // Start UI timer for display only (server handles actual commands)
     intervalRef.current = setInterval(() => {
-      if (currentPeriod === 'ON') {
-        // Currently ON period - count down ON timer
-        setIntervalCountdown(prev => {
-          if (prev <= 1) {
-            const now = Date.now();
-            // Only execute if more than 3 seconds have passed since last command
-            if (now - lastCommandTime.current > 3000) {
-              lastCommandTime.current = now;
-              console.log('🔄 3min ON period done, switching to OFF period');
-              tuyaAPI.controlDevice('a3cf493448182afaa9rlgw', 'ir_power', false);
-              currentPeriod = 'OFF';
-              setIsOnPeriod(false);
-              setOffCountdown(intervalDuration * 60); // Start 20min timer
-              setIntervalCountdown(0); // Hide ON timer
-            }
-            return 0;
-          }
-          return prev - 1;
-        });
-      } else {
-        // Currently OFF period - count down OFF timer
-        setOffCountdown(prev => {
-          if (prev <= 1) {
-            const now = Date.now();
-            // Only execute if more than 3 seconds have passed since last command
-            if (now - lastCommandTime.current > 3000) {
-              lastCommandTime.current = now;
-              console.log('🔄 20min OFF period done, switching to ON period');
-              tuyaAPI.controlDevice('a3cf493448182afaa9rlgw', 'ir_power', true);
-              currentPeriod = 'ON';
-              setIsOnPeriod(true);
-              setIntervalCountdown(onDuration * 60); // Start 3min timer
-              setOffCountdown(0); // Hide OFF timer
-            }
-            return 0;
-          }
-          return prev - 1;
-        });
-      }
+      updateIntervalDisplay();
     }, 1000);
   };
 
@@ -466,66 +451,12 @@ export default function Home() {
     
     console.log(`🔄 Resuming interval mode: ${elapsed}s elapsed, cycle position: ${cyclePosition}s`);
     
-    // Single timer approach - same as startIntervalMode
-    let currentPeriod = 'ON';
+    // Set initial display state
+    updateIntervalDisplay();
     
-    if (cyclePosition < onDur * 60) {
-      // We're in the ON period
-      const remainingOnTime = (onDur * 60) - cyclePosition;
-      setIntervalCountdown(remainingOnTime);
-      setIsOnPeriod(true);
-      setOffCountdown(0);
-      currentPeriod = 'ON';
-      console.log(`🔄 In ON period, ${remainingOnTime}s remaining`);
-    } else {
-      // We're in the OFF period
-      const remainingOffTime = (intervalDur * 60) - (cyclePosition - onDur * 60);
-      setOffCountdown(remainingOffTime);
-      setIsOnPeriod(false);
-      setIntervalCountdown(0);
-      currentPeriod = 'OFF';
-      console.log(`🔄 In OFF period, ${remainingOffTime}s remaining`);
-    }
-    
-    // Start the single timer that switches between periods
+    // Start UI timer for display only (server handles actual commands)
     intervalRef.current = setInterval(() => {
-      if (currentPeriod === 'ON') {
-        // Currently ON period - count down ON timer
-        setIntervalCountdown(prev => {
-          if (prev <= 1) {
-            const now = Date.now();
-            if (now - lastCommandTime.current > 3000) {
-              lastCommandTime.current = now;
-              console.log('🔄 3min ON period done, switching to OFF period');
-              tuyaAPI.controlDevice('a3cf493448182afaa9rlgw', 'ir_power', false);
-              currentPeriod = 'OFF';
-              setIsOnPeriod(false);
-              setOffCountdown(intervalDur * 60); // Start 20min timer
-              setIntervalCountdown(0); // Hide ON timer
-            }
-            return 0;
-          }
-          return prev - 1;
-        });
-      } else {
-        // Currently OFF period - count down OFF timer
-        setOffCountdown(prev => {
-          if (prev <= 1) {
-            const now = Date.now();
-            if (now - lastCommandTime.current > 3000) {
-              lastCommandTime.current = now;
-              console.log('🔄 20min OFF period done, switching to ON period');
-              tuyaAPI.controlDevice('a3cf493448182afaa9rlgw', 'ir_power', true);
-              currentPeriod = 'ON';
-              setIsOnPeriod(true);
-              setIntervalCountdown(onDur * 60); // Start 3min timer
-              setOffCountdown(0); // Hide OFF timer
-            }
-            return 0;
-          }
-          return prev - 1;
-        });
-      }
+      updateIntervalDisplay();
     }, 1000);
   };
 
