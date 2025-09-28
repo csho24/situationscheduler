@@ -3,73 +3,6 @@ import { tuyaAPI } from '@/lib/tuya-api';
 import { DEVICES } from '@/lib/persistent-storage';
 import { supabase } from '@/lib/supabase';
 
-// Check and execute interval mode transitions
-async function checkIntervalMode() {
-  try {
-    // Load active interval mode from Supabase
-    const { data: intervalData, error } = await supabase
-      .from('interval_mode')
-      .select('*')
-      .eq('is_active', true)
-      .single();
-    
-    if (error || !intervalData) {
-      // No active interval mode
-      return;
-    }
-    
-    console.log('🔄 Checking interval mode for device:', intervalData.device_id);
-    
-    const now = Date.now();
-    const startTime = new Date(intervalData.start_time).getTime();
-    const elapsedSeconds = Math.floor((now - startTime) / 1000);
-    
-    const onDuration = intervalData.on_duration || 3; // minutes
-    const intervalDuration = intervalData.interval_duration || 20; // minutes
-    const totalCycleTime = (onDuration + intervalDuration) * 60; // seconds
-    
-    // Calculate where we are in the current cycle
-    const cyclePosition = elapsedSeconds % totalCycleTime;
-    const onPeriodSeconds = onDuration * 60;
-    
-    console.log(`🔄 Interval mode: ${elapsedSeconds}s elapsed, cycle position: ${cyclePosition}s, ON period: ${onPeriodSeconds}s`);
-    
-    // Determine current period and target state
-    let shouldBeOn = false;
-    let currentPeriod = '';
-    
-    if (cyclePosition < onPeriodSeconds) {
-      // We're in the ON period
-      shouldBeOn = true;
-      currentPeriod = 'ON';
-    } else {
-      // We're in the OFF period
-      shouldBeOn = false;
-      currentPeriod = 'OFF';
-    }
-    
-    console.log(`🔄 Should be ${shouldBeOn ? 'ON' : 'OFF'} (${currentPeriod} period)`);
-    
-    // Check current device state
-    const deviceStatus = await tuyaAPI.getDeviceStatus(intervalData.device_id);
-    const currentState = (deviceStatus.result as { status?: Array<{ code: string; value: boolean }> })?.status?.find((s: { code: string; value: boolean }) => s.code === 'switch_1')?.value;
-    
-    console.log(`🔄 Current state: ${currentState ? 'ON' : 'OFF'}, Target: ${shouldBeOn ? 'ON' : 'OFF'}`);
-    
-    // Execute command if state mismatch
-    if (currentState !== shouldBeOn) {
-      console.log(`🔄 Executing interval mode command: ${shouldBeOn ? 'ON' : 'OFF'}`);
-      await tuyaAPI.controlDevice(intervalData.device_id, 'ir_power', shouldBeOn);
-      console.log(`✅ Interval mode: Turned ${shouldBeOn ? 'ON' : 'OFF'} aircon`);
-    } else {
-      console.log(`✅ Interval mode: Aircon already in correct state (${shouldBeOn ? 'ON' : 'OFF'})`);
-    }
-    
-  } catch (error) {
-    console.error('❌ Interval mode check failed:', error);
-  }
-}
-
 async function executeScheduleCheck() {
   const now = new Date();
   const currentTime = now.getHours() * 60 + now.getMinutes();
@@ -77,9 +10,6 @@ async function executeScheduleCheck() {
   
   console.log(`🔍 SERVER SCHEDULE CHECK at ${now.toLocaleTimeString()} (${currentTime} minutes)`);
   console.log(`🔍 DEBUG: Looking for date: ${today}`);
-  
-  // Check interval mode first (highest priority)
-  await checkIntervalMode();
   
   // Load calendar assignments from Supabase
   const { data: calendarData, error: calendarError } = await supabase
