@@ -4,31 +4,76 @@ let currentPeriod = 'ON';
 let lastCommandTime = 0;
 let onCountdown = 0;
 let offCountdown = 0;
+let onDuration = 3;
+let intervalDuration = 20;
+let startTime = 0;
 
 self.onmessage = function(e) {
   const { type, data } = e.data;
   
   if (type === 'START_INTERVAL') {
-    const { onDuration, intervalDuration, startTime } = data;
+    const { onDuration: newOnDuration, intervalDuration: newIntervalDuration, startTime: newStartTime, resumeMode, cyclePosition } = data;
+    
+    // Store the parameters
+    onDuration = newOnDuration;
+    intervalDuration = newIntervalDuration;
+    startTime = newStartTime;
+    
+    const timestamp = new Date().toLocaleTimeString();
+    console.log(`[${timestamp}] 🔄 Web Worker: Starting interval mode - ${onDuration}min ON, ${intervalDuration}min OFF`);
     
     // Clear any existing interval
     if (intervalId) {
       clearInterval(intervalId);
     }
     
-    currentPeriod = 'ON';
-    lastCommandTime = 0;
-    onCountdown = onDuration * 60;
-    offCountdown = 0;
+    // Initialize based on whether this is a fresh start or resume
+    if (resumeMode && cyclePosition !== undefined) {
+      // Resume mode - calculate current state from cycle position
+      if (cyclePosition < onDuration * 60) {
+        // Currently in ON period
+        currentPeriod = 'ON';
+        onCountdown = (onDuration * 60) - cyclePosition;
+        offCountdown = 0;
+        console.log(`[${timestamp}] 🔄 Web Worker: Resuming ON period with ${onCountdown}s remaining`);
+      } else {
+        // Currently in OFF period
+        currentPeriod = 'OFF';
+        offCountdown = (intervalDuration * 60) - (cyclePosition - onDuration * 60);
+        onCountdown = 0;
+        console.log(`[${timestamp}] 🔄 Web Worker: Resuming OFF period with ${offCountdown}s remaining`);
+      }
+    } else {
+      // Fresh start - begin with ON period
+      currentPeriod = 'ON';
+      onCountdown = onDuration * 60;
+      offCountdown = 0;
+      console.log(`[${timestamp}] 🔄 Web Worker: Fresh start - ON period for ${onCountdown}s`);
+    }
     
-    // Start the timer
+    lastCommandTime = 0;
+    
+    // Start the timer - NO 30-second sync to avoid conflicts
     intervalId = setInterval(() => {
       if (currentPeriod === 'ON') {
         onCountdown--;
+        
+        // Send countdown update every second
+        self.postMessage({
+          type: 'COUNTDOWN_UPDATE',
+          data: {
+            period: 'ON',
+            countdown: Math.max(0, onCountdown)
+          }
+        });
+        
         if (onCountdown <= 0) {
           const now = Date.now();
           if (now - lastCommandTime > 3000) {
             lastCommandTime = now;
+            const timestamp = new Date().toLocaleTimeString();
+            console.log(`[${timestamp}] 🔄 Web Worker: ON period done (${onDuration}min), switching to OFF period (${intervalDuration}min)`);
+            
             currentPeriod = 'OFF';
             offCountdown = intervalDuration * 60;
             
@@ -45,10 +90,23 @@ self.onmessage = function(e) {
         }
       } else {
         offCountdown--;
+        
+        // Send countdown update every second
+        self.postMessage({
+          type: 'COUNTDOWN_UPDATE',
+          data: {
+            period: 'OFF',
+            countdown: Math.max(0, offCountdown)
+          }
+        });
+        
         if (offCountdown <= 0) {
           const now = Date.now();
           if (now - lastCommandTime > 3000) {
             lastCommandTime = now;
+            const timestamp = new Date().toLocaleTimeString();
+            console.log(`[${timestamp}] 🔄 Web Worker: OFF period done (${intervalDuration}min), switching to ON period (${onDuration}min)`);
+            
             currentPeriod = 'ON';
             onCountdown = onDuration * 60;
             

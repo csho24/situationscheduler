@@ -57,7 +57,7 @@ Supabase is the single source of truth via `src/app/api/schedules/route.ts`:
 ### Backup Requirements
 - **CRITICAL**: Supabase data is NOT in git - database exists only in cloud
 - Regular backups required to prevent data loss
-- Current backup: `sqls/supabase-backup-2025-09-28-13-00.sql`
+- Current backup: `supabase-backup-2025-09-28-13-00.sql`
 
 ### Recent Major Changes (Sep 27-28, 2025)
 - **Data Loss Fix**: Removed destructive code that was deleting schedules on every edit
@@ -65,23 +65,6 @@ Supabase is the single source of truth via `src/app/api/schedules/route.ts`:
 - **Schedule Deletion Fix**: Fixed issue where deleted schedules kept reappearing
 - **Aircon Settings**: temp=26°C, wind=2 (middle speed)
 - **Backup Cleanup**: Removed old backup files causing duplicate schedules
-- **File Organization**: Moved documentation to `readmes/` and SQL files to `sqls/` folders
-
-### Files Deleted Today (Sep 28, 2025)
-**Deleted to fix duplicate schedule issue:**
-- `.tmp-scheduler-storage.json` - Backup file causing duplicates (data already restored to Supabase)
-- `restore-schedules.js` - One-time restoration script (no longer needed)
-- `restore-schedules.sql` - Generated SQL file (no longer needed)
-
-**Deleted failed backup attempts:**
-- `backup-current.js` (original) - Failed due to network issues (recreated)
-- `export-backup.js` - Failed due to network issues
-- `backup-via-client.js` - Failed due to network issues
-- `supabase-backup-2025-09-28-13-30.sql` - Empty file (0KB)
-- `supabase-backup-2025-09-28-13-50.sql` - Empty file (0KB)
-- `calendar_backup.json` - Failed JSON export
-
-**Current Status**: All important data preserved in Supabase and `sqls/supabase-backup-2025-09-28-13-00.sql`
 
 ### Local vs Deployed (Base URL & Safety)
 **CRITICAL**: For local development, set `NEXT_PUBLIC_BASE_URL=http://localhost:3001` in `.env.local`. 
@@ -125,14 +108,8 @@ Supabase is the single source of truth via `src/app/api/schedules/route.ts`:
    // Convert to SQL INSERT statements
    ```
 
-**Current backup**: `sqls/supabase-backup-2025-09-28-13-00.sql`
+**Current backup**: `supabase-backup-2025-09-28-13-00.sql`
 **Backup frequency**: Before any major changes or deployments
-
-### Project Structure
-- `readmes/` - All documentation and investigation files
-- `sqls/` - All SQL files, schemas, and database backups
-- `src/` - Application source code
-- Root directory - Configuration files and scripts only
 
 ### Development Notes
 - Vercel project root directory should be set to `plug-scheduler` (not repo root)

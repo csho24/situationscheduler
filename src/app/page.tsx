@@ -372,12 +372,6 @@ export default function Home() {
   };
 
   const startIntervalMode = async () => {
-    // Clear any existing intervals first to prevent overlap
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    
     // Clear any existing worker
     if (workerRef.current) {
       workerRef.current.terminate();
@@ -388,13 +382,13 @@ export default function Home() {
     const startTime = Date.now();
     setIntervalStartTime(startTime);
     await saveIntervalModeState(true, onDuration, intervalDuration, startTime);
-    
+
     console.log(`🔄 Interval mode started: ON for ${onDuration}min, OFF for ${intervalDuration}min`);
 
     // Start the cycle: Turn ON immediately, start ON period
     await tuyaAPI.controlDevice('a3cf493448182afaa9rlgw', 'ir_power', true);
     setIsOnPeriod(true);
-    setIntervalCountdown(onDuration * 60); // Start 3min timer
+    setIntervalCountdown(onDuration * 60); // Start ON timer
     setOffCountdown(0); // Hide OFF timer
     
     // Create Web Worker for timer
@@ -405,20 +399,31 @@ export default function Home() {
       const { type, data } = e.data;
       
       if (type === 'PERIOD_CHANGE') {
-        const { period, countdown, command } = data;
+        const timestamp = new Date().toLocaleTimeString();
+        console.log(`[${timestamp}] 🔄 Main Thread: Period changed to ${data.period}, countdown: ${data.countdown}`);
         
-        if (period === 'OFF') {
-          console.log('🔄 3min ON period done, switching to OFF period');
-          setIsOnPeriod(false);
-          setOffCountdown(countdown);
-          setIntervalCountdown(0);
-          tuyaAPI.controlDevice(command.device, command.action, command.value);
-        } else if (period === 'ON') {
-          console.log('🔄 20min OFF period done, switching to ON period');
+        // Update UI state
+        if (data.period === 'ON') {
           setIsOnPeriod(true);
-          setIntervalCountdown(countdown);
+          setIntervalCountdown(data.countdown);
           setOffCountdown(0);
-          tuyaAPI.controlDevice(command.device, command.action, command.value);
+        } else {
+          setIsOnPeriod(false);
+          setOffCountdown(data.countdown);
+          setIntervalCountdown(0);
+        }
+        
+        // Execute device command
+        if (data.command) {
+          console.log(`[${timestamp}] 🔧 Main Thread: Sending command - ${data.command.action} = ${data.command.value}`);
+          tuyaAPI.controlDevice(data.command.device, data.command.action, data.command.value);
+        }
+      } else if (type === 'COUNTDOWN_UPDATE') {
+        // Update countdown display without executing commands
+        if (data.period === 'ON') {
+          setIntervalCountdown(data.countdown);
+        } else {
+          setOffCountdown(data.countdown);
         }
       }
     };
@@ -428,21 +433,9 @@ export default function Home() {
       type: 'START_INTERVAL',
       data: { onDuration, intervalDuration, startTime }
     });
-    
-    // Keep countdown display updated
-    intervalRef.current = setInterval(() => {
-      setIntervalCountdown(prev => prev > 0 ? prev - 1 : 0);
-      setOffCountdown(prev => prev > 0 ? prev - 1 : 0);
-    }, 1000);
   };
 
   const stopIntervalMode = async () => {
-    // Clear the interval FIRST to prevent any more timer fires
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    
     // Clear worker
     if (workerRef.current) {
       workerRef.current.postMessage({ type: 'STOP_INTERVAL' });
@@ -466,7 +459,7 @@ export default function Home() {
 
   // Resume interval mode after page refresh with explicit start time
   const resumeIntervalModeWithStartTime = (startTime: number, onDur: number, intervalDur: number) => {
-    console.log(`🔄 Resuming interval mode from saved state`);
+    console.log(`🔄 Resuming interval mode from saved state using Web Worker`);
     
     // Calculate how much time has passed since the start time
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
@@ -475,16 +468,13 @@ export default function Home() {
     
     console.log(`🔄 Elapsed: ${elapsed}s, Cycle position: ${cyclePosition}s`);
     
-    // Single timer approach - same as startIntervalMode
-    let currentPeriod = 'ON';
-    
+    // Set initial UI state based on current cycle position
     if (cyclePosition < onDur * 60) {
       // We're in the ON period
       const remainingOnTime = (onDur * 60) - cyclePosition;
       setIntervalCountdown(remainingOnTime);
       setIsOnPeriod(true);
       setOffCountdown(0);
-      currentPeriod = 'ON';
       console.log(`🔄 In ON period, ${remainingOnTime}s remaining`);
     } else {
       // We're in the OFF period
@@ -492,50 +482,57 @@ export default function Home() {
       setOffCountdown(remainingOffTime);
       setIsOnPeriod(false);
       setIntervalCountdown(0);
-      currentPeriod = 'OFF';
       console.log(`🔄 In OFF period, ${remainingOffTime}s remaining`);
     }
     
-    // Start the single timer that switches between periods
-    intervalRef.current = setInterval(() => {
-      if (currentPeriod === 'ON') {
-        // Currently ON period - count down ON timer
-        setIntervalCountdown(prev => {
-          if (prev <= 1) {
-            const now = Date.now();
-            if (now - lastCommandTime.current > 3000) {
-              lastCommandTime.current = now;
-              console.log('🔄 3min ON period done, switching to OFF period');
-              tuyaAPI.controlDevice('a3cf493448182afaa9rlgw', 'ir_power', false);
-              currentPeriod = 'OFF';
-              setIsOnPeriod(false);
-              setOffCountdown(intervalDur * 60); // Start 20min timer
-              setIntervalCountdown(0); // Hide ON timer
-            }
-            return 0;
-          }
-          return prev - 1;
-        });
-      } else {
-        // Currently OFF period - count down OFF timer
-        setOffCountdown(prev => {
-          if (prev <= 1) {
-            const now = Date.now();
-            if (now - lastCommandTime.current > 3000) {
-              lastCommandTime.current = now;
-              console.log('🔄 20min OFF period done, switching to ON period');
-              tuyaAPI.controlDevice('a3cf493448182afaa9rlgw', 'ir_power', true);
-              currentPeriod = 'ON';
-              setIsOnPeriod(true);
-              setIntervalCountdown(onDur * 60); // Start 3min timer
-              setOffCountdown(0); // Hide OFF timer
-            }
-            return 0;
-          }
-          return prev - 1;
-        });
+    // Create Web Worker for timer (same as startIntervalMode)
+    workerRef.current = new Worker('/interval-worker.js');
+    
+    // Listen for messages from worker
+    workerRef.current.onmessage = (e) => {
+      const { type, data } = e.data;
+      
+      if (type === 'PERIOD_CHANGE') {
+        const timestamp = new Date().toLocaleTimeString();
+        console.log(`[${timestamp}] 🔄 Main Thread: Period changed to ${data.period}, countdown: ${data.countdown}`);
+        
+        // Update UI state
+        if (data.period === 'ON') {
+          setIsOnPeriod(true);
+          setIntervalCountdown(data.countdown);
+          setOffCountdown(0);
+        } else {
+          setIsOnPeriod(false);
+          setOffCountdown(data.countdown);
+          setIntervalCountdown(0);
+        }
+        
+        // Execute device command
+        if (data.command) {
+          console.log(`[${timestamp}] 🔧 Main Thread: Sending command - ${data.command.action} = ${data.command.value}`);
+          tuyaAPI.controlDevice(data.command.device, data.command.action, data.command.value);
+        }
+      } else if (type === 'COUNTDOWN_UPDATE') {
+        // Update countdown display without executing commands
+        if (data.period === 'ON') {
+          setIntervalCountdown(data.countdown);
+        } else {
+          setOffCountdown(data.countdown);
+        }
       }
-    }, 1000);
+    };
+    
+    // Start worker timer with resume data
+    workerRef.current.postMessage({
+      type: 'START_INTERVAL',
+      data: { 
+        onDuration: onDur, 
+        intervalDuration: intervalDur, 
+        startTime,
+        resumeMode: true,
+        cyclePosition 
+      }
+    });
   };
 
   // Resume interval mode after page refresh
@@ -547,19 +544,14 @@ export default function Home() {
   // Cleanup interval mode on unmount
   React.useEffect(() => {
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+      if (workerRef.current) {
+        workerRef.current.terminate();
       }
     };
   }, []);
 
-  // Load interval mode state on mount and clear any existing intervals
+  // Load interval mode state on mount
   React.useEffect(() => {
-    // Clear any existing intervals first
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
     
     loadIntervalModeState();
   }, []);
@@ -1052,13 +1044,6 @@ export default function Home() {
                 </div>
                 <div className="space-y-2">
                   {(() => {
-                    // DEBUG: Log what schedules we have for the current device
-                    console.log(`🔍 UI Debug - Device ${selectedDevice.id}:`, {
-                      hasCustomSchedules: Object.keys(customSchedules).length > 0,
-                      deviceSchedule: customSchedules[selectedDevice.id],
-                      allDevices: Object.keys(customSchedules)
-                    });
-                    
                     const workSchedule = customSchedules[selectedDevice.id]?.work || [];
                     const currentTimeMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
                     
