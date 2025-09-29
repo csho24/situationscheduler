@@ -337,3 +337,58 @@ This was the **same architectural pattern** as the "refresh undo" issue:
 - ✅ **Same fix pattern as previous refresh undo issue**
 
 **The system now properly handles both manual control persistence and schedule deletion.**
+
+---
+
+## CALENDAR UPSERT ROOT CAUSE FINALLY FIXED (September 29, 2025)
+
+### The Issue That Was Never Fixed
+On September 27, 2025, when we fixed the device schedules upsert issue, **calendar assignments were NOT properly fixed in the code**. The readme above mentions:
+- "Calendar assignments reverted to pre-Wednesday state"  
+- "Fixed Oct 13/14 calendar assignments via direct Supabase API calls"
+
+**What this means**: Calendar assignments were **manually patched in the database** but the **root cause in the code was never fixed**.
+
+### The Root Cause (Same Pattern as Device Schedules)
+Calendar assignments had the **exact same upsert issue** as device schedules:
+```typescript
+// BROKEN: Missing onConflict for unique constraint
+const { data, error } = await supabase
+  .from('calendar_assignments')
+  .upsert({
+    date: payload.date,
+    situation: payload.situation,
+    updated_at: new Date().toISOString()
+  })
+  .select();
+```
+
+**Error**: `duplicate key value violates unique constraint "calendar_assignments_date_key"`
+
+### The Fix Applied (September 29, 2025)
+```typescript
+// FIXED: Added onConflict for unique date constraint
+const { data, error } = await supabase
+  .from('calendar_assignments')
+  .upsert({
+    date: payload.date,
+    situation: payload.situation,
+    updated_at: new Date().toISOString()
+  }, {
+    onConflict: 'date'  // ← This line was missing
+  })
+  .select();
+```
+
+### Why This Pattern Applies Everywhere
+**CRITICAL LEARNING**: Any Supabase table with unique constraints MUST specify `onConflict` in upsert operations:
+
+- ✅ **Calendar Assignments**: `onConflict: 'date'`
+- ✅ **Device Schedules**: `onConflict: 'device_id,situation,time'` 
+- ✅ **Manual Overrides**: `onConflict: 'device_id'`
+- ✅ **Interval Mode**: `onConflict: 'device_id'`
+
+### The Real Problem
+**The issue was NEVER properly fixed on September 27** - it was just manually patched in the database. The code fix is what we applied today, following the exact same pattern that successfully fixed device schedules.
+
+**Lesson**: Always fix the root cause in code, not just patch the symptoms in the database.

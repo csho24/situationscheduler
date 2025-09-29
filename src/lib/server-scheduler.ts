@@ -85,25 +85,63 @@ export class ServerScheduler {
 
   // Set calendar assignment and sync to server
   async setSituation(date: string, situation: SituationType): Promise<void> {
+    // Update local state immediately
     this.schedules.set(date, { date, situation });
+    console.log(`📅 Updated local calendar state: ${date} -> ${situation}`);
+    
+    // Validate inputs
+    if (!date || !situation) {
+      console.error('❌ Invalid inputs:', { date, situation });
+      throw new Error('Invalid date or situation provided');
+    }
+    
+    // Validate date format (should be YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(date)) {
+      console.error('❌ Invalid date format:', date);
+      throw new Error('Date must be in YYYY-MM-DD format');
+    }
+    
+    // Validate situation
+    if (!['work', 'rest'].includes(situation)) {
+      console.error('❌ Invalid situation:', situation);
+      throw new Error('Situation must be "work" or "rest"');
+    }
     
     // No localStorage - use Supabase only
 
     // Sync to server
     try {
       const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-      await fetch(`${baseUrl}/api/schedules`, {
+      const requestBody = {
+        type: 'calendar',
+        date,
+        situation
+      };
+      
+      console.log(`📅 Sending calendar update to server:`, requestBody);
+      console.log(`📅 Request URL: ${baseUrl}/api/schedules`);
+      
+      const response = await fetch(`${baseUrl}/api/schedules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'calendar',
-          date,
-          situation
-        })
+        body: JSON.stringify(requestBody)
       });
+      
+      console.log(`📅 Server response status: ${response.status}`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`📅 Server error response:`, errorText);
+        throw new Error(`Server responded with ${response.status}: ${errorText}`);
+      }
+      
+      const responseData = await response.json();
+      console.log(`📅 Server response data:`, responseData);
       console.log(`📅 Synced calendar update to server: ${date} -> ${situation}`);
     } catch (error) {
       console.error('❌ Failed to sync calendar to server:', error);
+      // Don't revert local state - keep the optimistic update
     }
   }
 

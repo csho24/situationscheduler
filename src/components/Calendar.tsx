@@ -67,19 +67,37 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
   const handleSituationSelect = async (situation: SituationType) => {
     if (selectedDate) {
       const dateString = format(selectedDate, 'yyyy-MM-dd');
+      
+      // Update local state immediately for responsive UI
+      let updatedSchedules;
+      const existingIndex = schedules.findIndex(s => s.date === dateString);
+      
+      if (existingIndex >= 0) {
+        // Update existing assignment
+        updatedSchedules = [...schedules];
+        updatedSchedules[existingIndex] = { date: dateString, situation };
+      } else {
+        // Add new assignment
+        updatedSchedules = [...schedules, { date: dateString, situation }];
+      }
+      
+      setSchedules(updatedSchedules);
+      
+      // Then sync to server
       await serverScheduler.setSituation(dateString, situation);
       
-      // Reload schedules from server to get updated data
+      // Reload schedules from server to confirm the update
       try {
         const response = await fetch('/api/schedules');
         const data = await response.json();
         if (data.success && data.calendarAssignments) {
           setSchedules(data.calendarAssignments);
+          console.log('📅 Calendar: Reloaded from server after update');
         } else {
-          setSchedules(serverScheduler.getAllSchedules());
+          console.warn('📅 Calendar: Failed to reload from server, keeping local state');
         }
       } catch (error) {
-        setSchedules(serverScheduler.getAllSchedules());
+        console.error('📅 Calendar: Error reloading from server:', error);
       }
       
       onDateSelect?.(selectedDate, situation);

@@ -59,12 +59,24 @@ Supabase is the single source of truth via `src/app/api/schedules/route.ts`:
 - Regular backups required to prevent data loss
 - Current backup: `supabase-backup-2025-09-28-13-00.sql`
 
-### Recent Major Changes (Sep 27-28, 2025)
+### Recent Major Changes (Sep 27-29, 2025)
 - **Data Loss Fix**: Removed destructive code that was deleting schedules on every edit
 - **Supabase Sync Fixes**: Fixed cron job reading from old files instead of Supabase
 - **Schedule Deletion Fix**: Fixed issue where deleted schedules kept reappearing
 - **Aircon Settings**: temp=26°C, wind=2 (middle speed)
 - **Backup Cleanup**: Removed old backup files causing duplicate schedules
+- **Interval Mode Fix (Sep 29)**: Removed 30-second sync conflicts, added timestamped logging - Web Worker approach now working reliably for background operation
+- **Calendar Upsert Fix (Sep 29)**: Fixed calendar assignment updates failing with 500 errors due to missing `onConflict: 'date'` in upsert operation
+
+### Critical Database Pattern - UPSERT Operations (Sep 29, 2025)
+**IMPORTANT**: All Supabase upsert operations MUST specify `onConflict` for tables with unique constraints:
+
+- **Calendar Assignments**: `onConflict: 'date'` (date field is unique)
+- **Device Schedules**: `onConflict: 'device_id,situation,time'` (composite unique constraint)
+- **Manual Overrides**: `onConflict: 'device_id'` (device_id is unique)
+- **Interval Mode**: `onConflict: 'device_id'` (device_id is unique)
+
+**Pattern**: For any table with unique constraints, ALWAYS add `onConflict: 'column_name'` to upsert operations to prevent duplicate key constraint violations.
 
 ### Local vs Deployed (Base URL & Safety)
 **CRITICAL**: For local development, set `NEXT_PUBLIC_BASE_URL=http://localhost:3001` in `.env.local`. 

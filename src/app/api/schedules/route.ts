@@ -70,6 +70,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       schedules,
+      calendarAssignments: Object.values(schedules), // Add calendarAssignments array format
       deviceSchedules,
       manualOverrides,
       intervalMode: intervalData?.is_active || false,
@@ -92,22 +93,62 @@ export async function GET(request: NextRequest) {
 // Update schedule data in Supabase database
 export async function POST(request: NextRequest) {
   try {
-    const data = await request.json();
+    console.log(`📝 SERVER: Received POST request`);
+    
+    let data;
+    try {
+      data = await request.json();
+    } catch (parseError) {
+      console.error('❌ Failed to parse request JSON:', parseError);
+      return NextResponse.json({
+        success: false,
+        error: 'Invalid JSON in request body'
+      }, { status: 400 });
+    }
+    
     const { type, ...payload } = data;
+    
+    console.log(`📝 SERVER: Parsed request - type: ${type}, payload:`, JSON.stringify(payload, null, 2));
     
     if (type === 'calendar') {
       // Update calendar assignment
       if (payload.date && payload.situation) {
-        const { error } = await supabase
+        console.log(`📅 SERVER: Attempting to update calendar ${payload.date} -> ${payload.situation}`);
+        
+        // Test Supabase connection first
+        console.log(`📅 SERVER: Testing Supabase connection...`);
+        const { data: testData, error: testError } = await supabase
+          .from('calendar_assignments')
+          .select('count')
+          .limit(1);
+        
+        if (testError) {
+          console.error('❌ Supabase connection test failed:', testError);
+          throw new Error(`Supabase connection failed: ${testError.message}`);
+        }
+        
+        console.log(`📅 SERVER: Supabase connection OK, proceeding with update...`);
+        
+        const { data, error } = await supabase
           .from('calendar_assignments')
           .upsert({
             date: payload.date,
             situation: payload.situation,
             updated_at: new Date().toISOString()
-          });
+          }, {
+            onConflict: 'date'
+          })
+          .select();
         
-        if (error) throw error;
-        console.log(`📅 SERVER: Updated calendar ${payload.date} -> ${payload.situation}`);
+        if (error) {
+          console.error('❌ Supabase calendar update error:', error);
+          throw error;
+        }
+        
+        console.log(`📅 SERVER: Successfully updated calendar ${payload.date} -> ${payload.situation}`, data);
+      } else {
+        console.error('❌ Missing required fields for calendar update:', { date: payload.date, situation: payload.situation });
+        throw new Error('Missing required fields: date and situation');
       }
     } else if (type === 'devices') {
       // Update device schedules
@@ -214,9 +255,21 @@ export async function POST(request: NextRequest) {
     
   } catch (error) {
     console.error('❌ Error updating schedules in Supabase:', error);
+    console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    console.error('❌ Error details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      cause: error instanceof Error ? error.cause : undefined
+    });
+    
     return NextResponse.json({
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
+      details: error instanceof Error ? {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      } : String(error)
     }, { status: 500 });
   }
 }
