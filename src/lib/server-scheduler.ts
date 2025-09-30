@@ -3,7 +3,7 @@
 
 // import { tuyaAPI } from './tuya-api';
 
-export type SituationType = 'work' | 'rest';
+export type SituationType = 'work' | 'rest' | string; // string allows custom routines
 
 export interface ScheduleEntry {
   time: string; // HH:MM format

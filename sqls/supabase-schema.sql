@@ -5,7 +5,7 @@
 CREATE TABLE calendar_assignments (
   id SERIAL PRIMARY KEY,
   date DATE NOT NULL UNIQUE,
-  situation VARCHAR(10) NOT NULL CHECK (situation IN ('work', 'rest')),
+  situation VARCHAR(50) NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -14,7 +14,7 @@ CREATE TABLE calendar_assignments (
 CREATE TABLE device_schedules (
   id SERIAL PRIMARY KEY,
   device_id VARCHAR(50) NOT NULL,
-  situation VARCHAR(10) NOT NULL CHECK (situation IN ('work', 'rest')),
+  situation VARCHAR(50) NOT NULL,
   time VARCHAR(5) NOT NULL, -- Format: "10:00"
   action VARCHAR(3) NOT NULL CHECK (action IN ('on', 'off')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -54,12 +54,21 @@ CREATE TABLE interval_mode (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- 7. Custom routines table (store user-defined routine types)
+CREATE TABLE custom_routines (
+  id SERIAL PRIMARY KEY,
+  routine_name VARCHAR(50) NOT NULL UNIQUE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Create indexes for better performance
 CREATE INDEX idx_calendar_assignments_date ON calendar_assignments(date);
 CREATE INDEX idx_device_schedules_device_situation ON device_schedules(device_id, situation);
 CREATE INDEX idx_manual_overrides_device_until ON manual_overrides(device_id, until_timestamp);
 CREATE INDEX idx_execution_log_device_executed ON execution_log(device_id, executed_at);
 CREATE INDEX idx_interval_mode_device ON interval_mode(device_id);
+CREATE INDEX idx_custom_routines_name ON custom_routines(routine_name);
 
 -- Insert default template schedules for your devices
 -- Replace these device IDs with your actual device IDs

@@ -36,6 +36,21 @@ export async function GET(request: NextRequest) {
     
     if (intervalError) throw intervalError;
     
+    // Get user settings
+    const { data: userSettingsData, error: userSettingsError } = await supabase
+      .from('user_settings')
+      .select('*');
+    
+    if (userSettingsError) throw userSettingsError;
+    
+    // Get custom routines (temporarily disabled until table is created)
+    // const { data: customRoutinesData, error: customRoutinesError } = await supabase
+    //   .from('custom_routines')
+    //   .select('*');
+    
+    // if (customRoutinesError) throw customRoutinesError;
+    const customRoutinesData = [];
+    
     // Transform data to match expected format
     const schedules: Record<string, { date: string; situation: string }> = {};
     calendarData?.forEach(assignment => {
@@ -65,7 +80,13 @@ export async function GET(request: NextRequest) {
       };
     });
     
-    console.log(`📂 SERVER: Loaded ${calendarData?.length || 0} calendar assignments, ${deviceData?.length || 0} device schedules, ${overrideData?.length || 0} overrides`);
+    // Transform user settings to key-value pairs
+    const userSettings: Record<string, string> = {};
+    userSettingsData?.forEach(setting => {
+      userSettings[setting.setting_key] = setting.setting_value;
+    });
+    
+    console.log(`📂 SERVER: Loaded ${calendarData?.length || 0} calendar assignments, ${deviceData?.length || 0} device schedules, ${overrideData?.length || 0} overrides, ${userSettingsData?.length || 0} user settings, ${customRoutinesData?.length || 0} custom routines`);
     
     return NextResponse.json({
       success: true,
@@ -78,7 +99,9 @@ export async function GET(request: NextRequest) {
         onDuration: intervalData.on_duration || 3,
         intervalDuration: intervalData.interval_duration || 20,
         startTime: intervalData.start_time
-      } : null
+      } : null,
+      userSettings, // Added to response
+      customRoutines: customRoutinesData?.map(r => r.routine_name) || [] // Added to response
     });
     
   } catch (error) {
@@ -245,6 +268,50 @@ export async function POST(request: NextRequest) {
           throw error;
         }
         console.log(`🔄 SERVER: Interval mode ${isActive ? 'enabled' : 'disabled'} for ${deviceId}`, data);
+      }
+    } else if (type === 'user_settings') {
+      // Update user settings
+      const { settingKey, settingValue } = payload;
+      console.log(`⚙️ SERVER: Updating user setting - ${settingKey}: ${settingValue}`);
+      
+      if (settingKey && settingValue) {
+        const { data, error } = await supabase
+          .from('user_settings')
+          .upsert({
+            setting_key: settingKey,
+            setting_value: settingValue,
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'setting_key'
+          })
+          .select();
+        
+        if (error) {
+          console.error('❌ Supabase error:', error);
+          throw error;
+        }
+        console.log(`⚙️ SERVER: User setting updated - ${settingKey}: ${settingValue}`, data);
+      }
+    } else if (type === 'custom_routine') {
+      // Create custom routine
+      const { routineName } = payload;
+      console.log(`🆕 SERVER: Creating custom routine - ${routineName}`);
+      
+      if (routineName) {
+        const { data, error } = await supabase
+          .from('custom_routines')
+          .insert({
+            routine_name: routineName,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .select();
+        
+        if (error) {
+          console.error('❌ Supabase error:', error);
+          throw error;
+        }
+        console.log(`🆕 SERVER: Custom routine created - ${routineName}`, data);
       }
     }
     

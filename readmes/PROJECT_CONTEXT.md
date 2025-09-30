@@ -32,15 +32,36 @@ This app solves the problem of inconsistent work schedules where traditional fix
 ### Data Source (Supabase)
 Supabase is the single source of truth via `src/app/api/schedules/route.ts`:
 
+**CRITICAL: NO LOCAL STORAGE**
+- localStorage must NEVER be used for any functionality
+- All data persistence must go through Supabase
+- localStorage causes sync issues and data loss
+- Deployed version must work without localStorage
+- Any localStorage usage will be rejected and reverted
+
+**CRITICAL: NO LIGHT GREY TEXT**
+- Never use `text-gray-400` or `text-gray-500` for important text
+- Light grey text is invisible and unusable
+- Use `text-gray-600` or darker for readable text
+- Light grey should only be used for disabled states or very secondary info
+- User has to correct this every time - avoid it completely
+
 **Tables:**
 - `calendar_assignments(date, situation)` - work/rest day assignments
 - `device_schedules(device_id, situation, time, action)` - custom device schedules
 - `manual_overrides(device_id, until_timestamp, set_at)` - temporary automation blocks
 - `interval_mode(device_id, is_active, on_duration, interval_duration, start_time)` - aircon interval settings
+- `user_settings(setting_key, setting_value)` - user preferences like default days
+
+**CRITICAL: NO LOCAL STORAGE**
+- **NEVER use localStorage** - all data must be stored in Supabase
+- localStorage causes data loss, sync issues, and deployment problems
+- All user settings, schedules, and preferences are stored in Supabase tables
+- This ensures data consistency across devices and environments
 
 **API Endpoints:**
-- `GET /api/schedules` - returns schedules, deviceSchedules, manualOverrides, intervalMode
-- `POST /api/schedules` - upserts data to tables
+- `GET /api/schedules` - returns schedules, deviceSchedules, manualOverrides, intervalMode, userSettings
+- `POST /api/schedules` - upserts data to tables (supports user_settings type)
 - `GET /api/cron` - external cron endpoint for schedule execution
 - `POST /api/scheduler` - manual schedule check/execution
 - `GET/POST /api/tuya` - device control (plugs and IR aircon)
@@ -59,7 +80,7 @@ Supabase is the single source of truth via `src/app/api/schedules/route.ts`:
 - Regular backups required to prevent data loss
 - Current backup: `supabase-backup-2025-09-28-13-00.sql`
 
-### Recent Major Changes (Sep 27-29, 2025)
+### Recent Major Changes (Sep 27-30, 2025)
 - **Data Loss Fix**: Removed destructive code that was deleting schedules on every edit
 - **Supabase Sync Fixes**: Fixed cron job reading from old files instead of Supabase
 - **Schedule Deletion Fix**: Fixed issue where deleted schedules kept reappearing
@@ -67,6 +88,7 @@ Supabase is the single source of truth via `src/app/api/schedules/route.ts`:
 - **Backup Cleanup**: Removed old backup files causing duplicate schedules
 - **Interval Mode Fix (Sep 29)**: Removed 30-second sync conflicts, added timestamped logging - Web Worker approach now working reliably for background operation
 - **Calendar Upsert Fix (Sep 29)**: Fixed calendar assignment updates failing with 500 errors due to missing `onConflict: 'date'` in upsert operation
+- **Default Days Feature (Sep 30)**: Added user_settings table and default day functionality for unassigned days - NO localStorage used, all data in Supabase
 
 ### Critical Database Pattern - UPSERT Operations (Sep 29, 2025)
 **IMPORTANT**: All Supabase upsert operations MUST specify `onConflict` for tables with unique constraints:
@@ -75,6 +97,7 @@ Supabase is the single source of truth via `src/app/api/schedules/route.ts`:
 - **Device Schedules**: `onConflict: 'device_id,situation,time'` (composite unique constraint)
 - **Manual Overrides**: `onConflict: 'device_id'` (device_id is unique)
 - **Interval Mode**: `onConflict: 'device_id'` (device_id is unique)
+- **User Settings**: `onConflict: 'setting_key'` (setting_key is unique)
 
 **Pattern**: For any table with unique constraints, ALWAYS add `onConflict: 'column_name'` to upsert operations to prevent duplicate key constraint violations.
 

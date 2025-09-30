@@ -13,9 +13,10 @@ const DEVICES = [
 
 interface CalendarProps {
   onDateSelect?: (date: Date, situation: SituationType) => void;
+  customRoutines?: string[];
 }
 
-export default function Calendar({ onDateSelect }: CalendarProps) {
+export default function Calendar({ onDateSelect, customRoutines = [] }: CalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showSituationModal, setShowSituationModal] = useState(false);
@@ -181,6 +182,7 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
                 ${situation ? 'ring-2 ring-offset-1' : ''}
                 ${situation?.situation === 'work' ? 'ring-green-500 bg-green-50' : ''}
                 ${situation?.situation === 'rest' ? 'ring-yellow-500 bg-yellow-50' : ''}
+                ${situation?.situation && !['work', 'rest'].includes(situation.situation) ? 'ring-blue-500 bg-blue-50' : ''}
               `}
             >
               <span className="block">{format(date, 'd')}</span>
@@ -188,8 +190,10 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
                 <div className="absolute bottom-1 right-1">
                   {situation.situation === 'work' ? (
                     <BriefcaseIcon size={12} className="text-green-600" />
-                  ) : (
+                  ) : situation.situation === 'rest' ? (
                     <Coffee size={12} className="text-yellow-600" />
+                  ) : (
+                    <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
                   )}
                 </div>
               )}
@@ -224,6 +228,17 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
                 <Coffee size={20} className="text-yellow-600" />
                 <div className="font-medium text-yellow-800">Rest Day</div>
               </button>
+              
+              {customRoutines.map(routine => (
+                <button
+                  key={routine}
+                  onClick={() => handleSituationSelect(routine)}
+                  className="w-full p-4 bg-blue-50 hover:bg-blue-100 border-2 border-blue-200 rounded-lg transition-colors flex items-center justify-center gap-3 cursor-pointer"
+                >
+                  <div className="w-5 h-5 bg-blue-600 rounded-full"></div>
+                  <div className="font-medium text-blue-800">{routine}</div>
+                </button>
+              ))}
             </div>
             
             <button
@@ -239,7 +254,7 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
       {/* Legend */}
       <div className="mt-6 pt-4 border-t border-gray-200">
         <div className="text-sm text-gray-800 mb-2"></div>
-        <div className="flex items-center gap-4 text-sm text-gray-800">
+        <div className="flex items-center gap-4 text-sm text-gray-800 flex-wrap">
           <div className="flex items-center gap-1">
             <BriefcaseIcon size={12} className="text-green-600" />
             <span>Work Day</span>
@@ -248,6 +263,12 @@ export default function Calendar({ onDateSelect }: CalendarProps) {
             <Coffee size={12} className="text-yellow-600" />
             <span>Rest Day</span>
           </div>
+          {customRoutines.map(routine => (
+            <div key={routine} className="flex items-center gap-1">
+              <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
+              <span>{routine}</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>

@@ -69,23 +69,36 @@ export async function GET() {
     // Get today's situation from the API response
     const schedules = data.schedules || {};
     const todaySchedule = schedules[today];
-    const situation = todaySchedule?.situation;
+    let situation = todaySchedule?.situation;
+    let isUsingDefault = false;
     
-    // If no day is assigned, don't run any schedules
+    // If no day is assigned, use default from user settings
     if (!situation) {
-      console.log(`📅 No day assigned for today (${today}) - no schedules will run`);
-      return NextResponse.json({
-        success: true,
-        message: 'No day assigned - no schedules executed',
-        result: {
-          date: today,
-          situation: 'none',
-          executed: []
-        }
-      });
+      console.log(`📅 No day assigned for today (${today}) - checking default settings`);
+      
+      const userSettings = data.userSettings || {};
+      const defaultDay = userSettings.default_day || 'rest';
+      
+      if (defaultDay === 'none') {
+        console.log(`📅 No day assigned and default is 'none' - no schedules will run`);
+        return NextResponse.json({
+          success: true,
+          message: 'No day assigned and default is none - no schedules executed',
+          result: {
+            date: today,
+            situation: 'none',
+            executed: [],
+            isUsingDefault: false
+          }
+        });
+      }
+      
+      situation = defaultDay;
+      isUsingDefault = true;
+      console.log(`📋 Using default schedule: ${defaultDay} day (unassigned day)`);
+    } else {
+      console.log(`📋 Today's schedule: ${situation} day`);
     }
-    
-    console.log(`📋 Today's schedule: ${situation} day`);
     
     // Get device schedules from the API response
     const deviceSchedules = data.deviceSchedules || {};
@@ -180,11 +193,12 @@ export async function GET() {
     
     return NextResponse.json({
       success: true,
-      message: 'Cron executed successfully',
+      message: isUsingDefault ? `Cron executed successfully (using default: ${situation})` : 'Cron executed successfully',
       result: {
         date: today,
         situation: situation,
-        executed: executedActions
+        executed: executedActions,
+        isUsingDefault
       }
     });
   } catch (error) {

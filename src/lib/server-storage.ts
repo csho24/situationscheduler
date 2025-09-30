@@ -6,7 +6,7 @@ interface ScheduleEntry {
   action: 'on' | 'off';
 }
 
-type SituationType = 'work' | 'rest';
+type SituationType = 'work' | 'rest' | string; // string allows custom routines
 
 interface DaySchedule {
   date: string; // YYYY-MM-DD format

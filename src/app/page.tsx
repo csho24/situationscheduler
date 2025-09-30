@@ -287,6 +287,12 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [customSchedules, setCustomSchedules] = useState(() => serverScheduler.getCustomSchedules());
   const [isLoadingSchedules, setIsLoadingSchedules] = useState(true);
+  const [userSettings, setUserSettings] = useState<Record<string, string>>({});
+  const [isEditingDefaultDay, setIsEditingDefaultDay] = useState(false);
+  const [isHoveringDropdown, setIsHoveringDropdown] = useState(false);
+  const [customRoutines, setCustomRoutines] = useState<string[]>([]);
+  const [showCreateRoutineModal, setShowCreateRoutineModal] = useState(false);
+  const [newRoutineName, setNewRoutineName] = useState('');
   
   // Interval mode state for aircon (shared across pages)
   const [intervalMode, setIntervalMode] = useState(false);
@@ -329,6 +335,34 @@ export default function Home() {
   // Save just the configuration (without starting interval mode)
   const saveIntervalConfig = async (onDur: number, intervalDur: number) => {
     await saveIntervalModeState(intervalMode, onDur, intervalDur, intervalStartTime || undefined);
+  };
+
+  // Create custom routine
+  const createCustomRoutine = async (routineName: string) => {
+    try {
+      const response = await fetch('/api/schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'custom_routine',
+          routineName: routineName
+        })
+      });
+      
+      if (response.ok) {
+        setCustomRoutines(prev => [...prev, routineName]);
+        setNotification(`Custom routine "${routineName}" created successfully!`);
+        setTimeout(() => setNotification(null), 3000);
+        setShowCreateRoutineModal(false);
+        setNewRoutineName('');
+      } else {
+        throw new Error('Failed to create custom routine');
+      }
+    } catch (error) {
+      console.error('Error creating custom routine:', error);
+      setNotification('Failed to create custom routine');
+      setTimeout(() => setNotification(null), 3000);
+    }
   };
 
   // Load interval mode state from Supabase
@@ -574,6 +608,18 @@ export default function Home() {
             setTodayInfo(serverScheduler.getTodayScheduleInfo());
           } else {
             console.log(`❌ UI: No device schedules in API response`);
+          }
+          
+          // Load user settings
+          if (data.success && data.userSettings) {
+            console.log(`✅ UI: Loaded user settings:`, data.userSettings);
+            setUserSettings(data.userSettings);
+          }
+          
+          // Load custom routines
+          if (data.success && data.customRoutines) {
+            console.log(`✅ UI: Loaded custom routines:`, data.customRoutines);
+            setCustomRoutines(data.customRoutines);
           }
           setIsLoadingSchedules(false);
         } catch (error) {
@@ -870,7 +916,7 @@ export default function Home() {
                 Assign work or rest day smart plug schedules to your days!
               </p>
             </div>
-            <CalendarComponent onDateSelect={handleDateSelect} />
+            <CalendarComponent onDateSelect={handleDateSelect} customRoutines={customRoutines} />
           </div>
         )}
 
@@ -921,6 +967,67 @@ export default function Home() {
               <p className="text-gray-600">
                 View and configure your situation-based schedules.
               </p>
+            </div>
+            
+            {/* Default Days Selector */}
+            <div className="max-w-lg mx-auto">
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700">Default Days:</label>
+                <div 
+                  className="rounded-md"
+                  onMouseEnter={() => !isEditingDefaultDay && setIsHoveringDropdown(true)}
+                  onMouseLeave={() => setIsHoveringDropdown(false)}
+                >
+                  <select 
+                    value={userSettings?.default_day || 'rest'} 
+                    disabled={!isEditingDefaultDay}
+                    onChange={async (e) => {
+                      const newValue = e.target.value;
+                      setUserSettings(prev => ({ ...prev, default_day: newValue }));
+                      try {
+                        await fetch('/api/schedules', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            type: 'user_settings',
+                            settingKey: 'default_day',
+                            settingValue: newValue
+                          })
+                        });
+                        setNotification(`Default days set to: ${newValue}`);
+                        setTimeout(() => setNotification(null), 3000);
+                        setIsEditingDefaultDay(false); // Auto-save and exit edit mode
+                      } catch (error) {
+                        console.error('Error updating default days:', error);
+                      }
+                    }}
+                    className={`px-3 py-1 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      isEditingDefaultDay 
+                        ? 'bg-white border-gray-300 text-gray-900' 
+                        : 'bg-gray-200 border-gray-200 text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    <option value="work">Work</option>
+                    <option value="rest">Rest</option>
+                    {customRoutines.map(routine => (
+                      <option key={routine} value={routine}>{routine}</option>
+                    ))}
+                    <option value="none">None</option>
+                  </select>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsEditingDefaultDay(!isEditingDefaultDay);
+                  }}
+                  className={`px-3 py-1 bg-gray-50 text-sm rounded-md border border-gray-200 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 focus:ring-offset-2 ${
+                    isHoveringDropdown && !isEditingDefaultDay 
+                      ? 'text-gray-600 bg-gray-100' 
+                      : 'text-gray-400'
+                  }`}
+                >
+                  {isEditingDefaultDay ? 'Cancel' : 'Edit'}
+                </button>
+              </div>
             </div>
             
             {/* Device Selector */}
@@ -1184,10 +1291,7 @@ export default function Home() {
               {/* Add Routine Button */}
               <div className="bg-white rounded-lg shadow p-6">
                 <button
-                  onClick={() => {
-                    setNotification('Custom routines coming soon! For now, edit existing schedules.');
-                    setTimeout(() => setNotification(null), 3000);
-                  }}
+                  onClick={() => setShowCreateRoutineModal(true)}
                   className="w-full flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-700 hover:text-gray-900 hover:border-gray-400 transition-colors mb-4"
                 >
                   <Plus size={20} />
@@ -1208,6 +1312,58 @@ export default function Home() {
           onSave={handleSaveSchedule}
           onCancel={() => setEditingSituation(null)}
         />
+      )}
+
+      {/* Create Custom Routine Modal */}
+      {showCreateRoutineModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Create Custom Routine</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Routine Name
+                  </label>
+                  <input
+                    type="text"
+                    value={newRoutineName}
+                    onChange={(e) => setNewRoutineName(e.target.value)}
+                    placeholder="e.g., Weekend, Travel, Study"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-500"
+                    autoFocus
+                  />
+                </div>
+                <div className="text-sm text-gray-600">
+                  This will create a new routine type that you can assign to calendar days and set as the default for unassigned days.
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 p-6 pt-4 border-t bg-gray-50">
+              <button
+                onClick={() => {
+                  if (newRoutineName.trim()) {
+                    createCustomRoutine(newRoutineName.trim());
+                  }
+                }}
+                disabled={!newRoutineName.trim()}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                <Plus size={16} />
+                Create Routine
+              </button>
+              <button
+                onClick={() => {
+                  setShowCreateRoutineModal(false);
+                  setNewRoutineName('');
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Debug Trigger – centered and close to footer */}

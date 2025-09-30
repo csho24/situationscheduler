@@ -340,6 +340,26 @@ This was the **same architectural pattern** as the "refresh undo" issue:
 
 ---
 
+## 8:10 PM EXECUTION PROBLEM - ROOT CAUSE ANALYSIS (September 27, 2025)
+
+### The Problem That Existed for Days
+- **8:10 PM problem existed for DAYS** - lights wouldn't turn OFF at 20:10 (and 20:09, 20:08, etc.)
+- **You tried changing the times** - still didn't work
+- **The schedules were THERE in the database** - but the OFF commands weren't executing
+- **Eventually, during troubleshooting, the destructive DELETE operation wiped all schedules**
+- **We had to restore all schedules** - and suddenly the 8:10 PM problem was fixed
+
+### Key Insight
+The 8:10 PM problem was NOT about missing schedules - the schedules were always there in the database. The problem was with the **execution system** that was failing to execute OFF commands around that time period. When we restored the schedules, we must have also fixed whatever was preventing the OFF commands from executing at 20:10.
+
+### What This Means
+- **Schedule data was never the issue** - it was always present
+- **Execution infrastructure was broken** - something was preventing OFF commands from running
+- **Restoration process fixed both** - schedules AND the underlying execution problem
+- **The destructive DELETE operation was a symptom, not the cause** of the original 8:10 PM problem
+
+---
+
 ## CALENDAR UPSERT ROOT CAUSE FINALLY FIXED (September 29, 2025)
 
 ### The Issue That Was Never Fixed
