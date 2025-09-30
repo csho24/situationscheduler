@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     //   .select('*');
     
     // if (customRoutinesError) throw customRoutinesError;
-    const customRoutinesData = [];
+    const customRoutinesData: { routine_name: string }[] = [];
     
     // Transform data to match expected format
     const schedules: Record<string, { date: string; situation: string }> = {};
