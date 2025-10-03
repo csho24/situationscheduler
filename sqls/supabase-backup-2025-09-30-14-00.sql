@@ -156,3 +156,16 @@ ON CONFLICT (device_id) DO UPDATE SET
 --
 -- This backup was created before implementing the default days feature.
 -- All data is preserved and can be restored if needed.
+
+
+
+
+
+
+
+
+
+
+
+
+

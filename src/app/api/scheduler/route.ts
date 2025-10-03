@@ -34,46 +34,14 @@ async function executeScheduleCheck() {
   console.log(`🔍 DEBUG: Available schedules:`, Object.keys(scheduleStorage));
   
   // Get today's schedule assignment
-  let todaySchedule = scheduleStorage[today];
-  let isUsingDefault = false;
-  
+  const todaySchedule = scheduleStorage[today];
   if (!todaySchedule) {
     console.log(`📅 No schedule assigned for today (${today})`);
     console.log(`📅 Available dates: ${Object.keys(scheduleStorage).join(', ')}`);
-    
-    // Get user settings for default day
-    const { data: userSettingsData, error: userSettingsError } = await supabase
-      .from('user_settings')
-      .select('*');
-    
-    if (userSettingsError) {
-      console.error('❌ Failed to load user settings:', userSettingsError);
-      return { message: `No schedule for today (${today}) and failed to load default settings`, executed: [], availableDates: Object.keys(scheduleStorage) };
-    }
-    
-    // Transform user settings to key-value pairs
-    const userSettings: Record<string, string> = {};
-    userSettingsData?.forEach(setting => {
-      userSettings[setting.setting_key] = setting.setting_value;
-    });
-    
-    const defaultDay = userSettings.default_day || 'rest';
-    
-    if (defaultDay === 'none') {
-      console.log(`📅 No schedule assigned and default is 'none' - no schedules will run`);
-      return { message: `No schedule for today (${today}) and default is 'none'`, executed: [], availableDates: Object.keys(scheduleStorage) };
-    }
-    
-    // Use default day
-    todaySchedule = {
-      date: today,
-      situation: defaultDay
-    };
-    isUsingDefault = true;
-    console.log(`📋 Using default schedule: ${defaultDay} day (unassigned day)`);
-  } else {
-    console.log(`📋 Today's schedule: ${todaySchedule.situation} day`);
+    return { message: `No schedule for today (${today})`, executed: [], availableDates: Object.keys(scheduleStorage) };
   }
+  
+  console.log(`📋 Today's schedule: ${todaySchedule.situation} day`);
   
   // Load device schedules from Supabase
   const { data: deviceScheduleData, error: deviceError } = await supabase
@@ -101,6 +69,24 @@ async function executeScheduleCheck() {
   });
   
   console.log(`📋 Loaded device schedules for ${Object.keys(deviceSchedules).length} devices from Supabase`);
+  
+  // Minimal diagnostics for Lights in 20:00–20:45 window (local server time)
+  try {
+    const lightsId = 'a3e31a88528a6efc15yf4o';
+    const lights = (deviceSchedules[lightsId]?.[todaySchedule.situation]) || [];
+    const windowEntries = lights
+      .map(e => {
+        const [h, m] = e.time.split(':').map(Number);
+        return { ...e, minutes: h * 60 + m };
+      })
+      .filter(e => e.minutes >= (20 * 60) && e.minutes <= (20 * 60 + 45));
+    const match = windowEntries.find(e => e.minutes === currentTime) || null;
+    if (windowEntries.length) {
+      console.log(JSON.stringify({ tag: 'server.window.lights', date: today, currentTime, entries: windowEntries.map(e => ({ time: e.time, action: e.action })), match: match ? { time: match.time, action: match.action } : null }));
+    }
+  } catch (_) {
+    // no-op
+  }
   
   const executedActions: string[] = [];
   
@@ -191,11 +177,10 @@ async function executeScheduleCheck() {
   }
   
   return {
-    message: isUsingDefault ? `Schedule check completed (using default: ${todaySchedule.situation})` : 'Schedule check completed',
+    message: 'Schedule check completed',
     time: now.toISOString(),
     situation: todaySchedule.situation,
-    executed: executedActions,
-    isUsingDefault
+    executed: executedActions
   };
 }
 

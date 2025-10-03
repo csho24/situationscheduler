@@ -25,17 +25,21 @@
 
 1. Cron timing drift or delay
    - External cron may have pinged at 20:11 instead of 20:10; code only executes events in the exact minute.
+   - Update 2025-10-01: PRIOR SPECULATION REVISED — DRIFT WAS NOT THE CAUSE. Provider execution logs show consistent blackout windows (:01–:10 and :31–:40 each hour) where `/api/cron` is not invoked. The issue is provider blackout, not timing drift.
 2. Data source mismatch (less likely for this incident)
    - Deployed version reads schedules from Supabase; if Lights’ 20:10 OFF wasn’t present server-side, the OFF wouldn’t run.
+   - Update 2025-10-01: UNLIKELY. Repeated checks show schedules present; provider failure explains the misses.
 3. Temporary connectivity/API issues
    - Tuya API reachable from prod at other times; a transient failure at 20:10 could prevent execution.
+   - Update 2025-10-01: POSSIBLE secondary effect. Main issue is cron not invoking `/api/cron` during affected minutes.
 4. Manual action not involved
    - No scheduled ONs after 20:10 were present; report indicates it “just didn’t switch OFF.”
+   - Note: Manual Smart Life app actions do not appear in Vercel logs (by design).
 
 ### Why it later “started working again” (possible explanations)
 
 - Later scheduled OFFs fell exactly on minutes when cron did hit, so they executed.
-- Laptop worked because its scheduled minutes happened to align with cron hits during that period.
+- Update 2025-10-01: Some earlier speculations that Laptop success vs Lights failure indicated device-only issues were incomplete; provider blackout explains misses irrespective of device.
 
 ### Recommended fixes (options; no changes applied yet)
 
@@ -105,4 +109,68 @@ The 8:10 PM problem was NOT about missing schedules - the schedules were always 
 - **Execution infrastructure was broken** - something was preventing OFF commands from running
 - **Restoration process fixed both** - schedules AND the underlying execution problem
 - **The destructive DELETE operation was a symptom, not the cause** of the original 8:10 PM problem
+
+---
+
+## Log - 2025-09-30 (SG)
+
+- 20:02 — Changed schedule to turn OFF at 20:05
+- 20:05 — Lights did NOT turn OFF
+- 20:18 — Tested OFF manually; lights turned OFF promptly
+
+---
+
+## Test results - 2025-10-01 (SG)
+
+- Diagnostics in place (added 2025-09-30): Minimal logs output `cron.window.lights` and `server.window.lights` JSON between 20:00–20:45 showing `currentTime`, Lights entries in that window, and which equals the current minute (if any).
+
+### Observed
+- 20:08 — Lights did NOT turn ON
+- 20:09 — Lights did NOT turn ON
+- 20:08–20:09 — Laptop DID turn ON/OFF at same scheduled times (confirmed working)
+
+### Key finding
+- **Laptop schedules executed successfully while Lights failed at the exact same minutes.**
+- This eliminates scheduler timing/cron alignment as the root cause.
+- Points to `Lights` device-specific issue: connectivity (Wi-Fi), device path, or Tuya API acceptance for this specific device.
+
+### Additional finding (from cron provider execution logs)
+- External cron provider reports consistent failures in these minute ranges:
+  - :01–:10 of each hour
+  - :31–:40 of each hour
+- During these windows, `/api/cron` is not invoked (or fails), so scheduled actions do not run regardless of device.
+- Action: Add a second independent cron provider (staggered by ~30s) and ensure `/api/cron` is idempotent to avoid double execution.
+
+### New plan (as of 2025-10-01)
+- Keep current cron provider running every minute.
+- Add a second provider that runs only during the blackout windows (cron: `1-10,31-40 * * * *`) and delays ~30s before calling `/api/cron`.
+- Add lightweight idempotency in `/api/cron` (per device/action/minute) so duplicate hits are safe.
+
+### Alternative workaround (as of 2025-10-01)
+- **Avoid scheduling during blackout windows**: Use only minutes 00, 15, 30, 45 (quarters and half-hours).
+- **Avoid minutes**: 01–10, 31–40 (provider blackout windows).
+- **For 20:08–20:10 issue**: Move Lights OFF to 20:00 or 20:15 instead.
+- **Pros**: Zero code changes, works immediately.
+- **Cons**: Less precise timing, need to remember the pattern.
+
+### Analysis pending
+- Review server logs for `cron.window.lights` entries around 20:08–20:09:
+  - Did the scheduled minute match? (Expected: YES, since Laptop executed)
+  - Was "Executing" logged for Lights?
+  - Was there a Tuya API call and what was the response/status?
+- Check if "Lights offline" notifications occurred around 20:08–20:09.
+
+### Recent changes (diagnostics) - 2025-09-30
+
+- Minimal logs added (no behavior change):
+  - `api/cron/route.ts` prints `cron.window.lights` JSON between 20:00–20:45 with `currentTime`, the Lights entries in that window, and which equals the current minute (if any).
+  - `api/scheduler/route.ts` prints `server.window.lights` JSON with the same info.
+- What this should show:
+  - If there is a minute match but no subsequent "Executing" for Lights, it points to Tuya/device connectivity at that time.
+  - If there is no minute match at 20:05–20:10, it points to timing mismatch (exact-minute cron alignment).
+  - If both minute match and "Executing" appear yet the plug stays ON, it suggests device path or API acceptance without effect.
+
+### Logging scope note
+- Manual actions performed via the Smart Life (Tuya) app do NOT appear in Vercel logs because they bypass our app's `/api/tuya` endpoint. Only actions initiated via our site are logged in Vercel.
+
 

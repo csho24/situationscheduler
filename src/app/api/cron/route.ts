@@ -116,6 +116,24 @@ export async function GET() {
     
     console.log(`📋 Loaded schedules for ${Object.keys(schedulesByDevice).length} devices`);
     
+    // Minimal diagnostics for Lights in 20:00–20:45 window (SG) without changing behavior
+    try {
+      const lightsId = 'a3e31a88528a6efc15yf4o';
+      const lights = schedulesByDevice[lightsId] || [];
+      const windowEntries = lights
+        .map(e => {
+          const [h, m] = e.time.split(':').map(Number);
+          return { ...e, minutes: h * 60 + m };
+        })
+        .filter(e => e.minutes >= (20 * 60) && e.minutes <= (20 * 60 + 45));
+      const match = windowEntries.find(e => e.minutes === currentTime) || null;
+      if (windowEntries.length) {
+        console.log(JSON.stringify({ tag: 'cron.window.lights', today, currentTime, entries: windowEntries.map(e => ({ time: e.time, action: e.action })), match: match ? { time: match.time, action: match.action } : null }));
+      }
+    } catch (_) {
+      // no-op
+    }
+    
     const executedActions = [];
     
     for (const [deviceId, deviceSchedule] of Object.entries(schedulesByDevice)) {

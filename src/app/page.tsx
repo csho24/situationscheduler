@@ -300,8 +300,8 @@ export default function Home() {
   const [offCountdown, setOffCountdown] = useState(0);
   const [isOnPeriod, setIsOnPeriod] = useState(true);
   const [showIntervalConfig, setShowIntervalConfig] = useState(true);
-  const [onDuration, setOnDuration] = useState(3);
-  const [intervalDuration, setIntervalDuration] = useState(20);
+  const [onDuration, setOnDuration] = useState(0);
+  const [intervalDuration, setIntervalDuration] = useState(0);
   const [intervalStartTime, setIntervalStartTime] = useState<number | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastCommandTime = useRef<number>(0);
@@ -375,8 +375,8 @@ export default function Home() {
         
         // Load user's configuration if available
         if (data.intervalConfig) {
-          setOnDuration(data.intervalConfig.onDuration || 3);
-          setIntervalDuration(data.intervalConfig.intervalDuration || 20);
+          setOnDuration(data.intervalConfig.onDuration);
+          setIntervalDuration(data.intervalConfig.intervalDuration);
           
           if (data.intervalMode && data.intervalConfig.startTime) {
             // If interval mode was active, keep config open and resume
@@ -386,7 +386,7 @@ export default function Home() {
             
             // Resume immediately with the loaded start time
             setTimeout(() => {
-              resumeIntervalModeWithStartTime(startTime, data.intervalConfig.onDuration || 3, data.intervalConfig.intervalDuration || 20);
+              resumeIntervalModeWithStartTime(startTime, data.intervalConfig.onDuration, data.intervalConfig.intervalDuration);
             }, 100);
           }
         }

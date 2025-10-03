@@ -28,6 +28,7 @@ This app solves the problem of inconsistent work schedules where traditional fix
   - External cron calls `GET /api/cron` every minute
   - Server scheduler: `POST /api/scheduler` (also callable manually)
   - Manual device control via same `GET/POST /api/tuya` endpoint
+  
 
 ### Data Source (Supabase)
 Supabase is the single source of truth via `src/app/api/schedules/route.ts`:
@@ -53,6 +54,11 @@ Supabase is the single source of truth via `src/app/api/schedules/route.ts`:
 - `interval_mode(device_id, is_active, on_duration, interval_duration, start_time)` - aircon interval settings
 - `user_settings(setting_key, setting_value)` - user preferences like default days
 
+Note on interval mode storage:
+- Interval mode settings are persisted in Supabase in the `interval_mode` table (no localStorage fallback).
+- The UI saves/updates via `POST /api/schedules` with `type: 'interval_mode'` and reads via `GET /api/schedules` (`intervalMode` + `intervalConfig`).
+- Defaults 3/20 are UI/server fallbacks only when no DB row exists; they are not saved unless explicitly updated.
+
 **CRITICAL: NO LOCAL STORAGE**
 - **NEVER use localStorage** - all data must be stored in Supabase
 - localStorage causes data loss, sync issues, and deployment problems
@@ -74,6 +80,9 @@ Supabase is the single source of truth via `src/app/api/schedules/route.ts`:
 
 ### Timezone
 - All time calculations use `Asia/Singapore` timezone via `Intl.DateTimeFormat`
+
+### Logging Notes
+- Smart Life (Tuya) app manual actions do NOT appear in Vercel logs (they bypass our `/api/tuya`). Only actions initiated via our app/site are logged.
 
 ### Backup Requirements
 - **CRITICAL**: Supabase data is NOT in git - database exists only in cloud
@@ -150,3 +159,28 @@ Supabase is the single source of truth via `src/app/api/schedules/route.ts`:
 - Vercel project root directory should be set to `plug-scheduler` (not repo root)
 - Test both localhost and deployed environments separately
 - Monitor console logs for network connectivity issues
+
+### Public/Commercial Expansion Requirements (2025-10-02)
+
+**Cron Infrastructure for Scale:**
+- Current free cron provider has blackout windows (:01–:10, :31–:40 each hour)
+- For commercial deployment, need reliable every-minute execution
+- Options:
+  1. **Dual free providers**: Add second provider for blackout windows with idempotency
+  2. **Upgrade to paid tier**: Single reliable provider with SLA guarantees
+  3. **Vercel Pro cron**: Native Vercel cron (requires Pro plan)
+
+**Rate Limiting Considerations:**
+- Monitor daily execution limits on free tiers
+- Implement usage tracking and alerts
+- Plan for upgrade when approaching limits
+
+**Reliability Requirements:**
+- 99%+ uptime for scheduled actions
+- Monitoring and alerting for failures
+- Customer support for missed executions
+
+**Technical Implementation:**
+- Add idempotency to `/api/cron` to handle duplicate calls safely
+- Implement execution logging for debugging
+- Create monitoring dashboard for cron health

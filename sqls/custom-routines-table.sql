@@ -18,3 +18,16 @@ CREATE INDEX idx_custom_routines_name ON custom_routines(routine_name);
 -- ('travel'),
 -- ('study')
 -- ON CONFLICT (routine_name) DO NOTHING;
+
+
+
+
+
+
+
+
+
+
+
+
+

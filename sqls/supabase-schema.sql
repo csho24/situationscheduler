@@ -47,8 +47,8 @@ CREATE TABLE interval_mode (
   id SERIAL PRIMARY KEY,
   device_id VARCHAR(50) NOT NULL UNIQUE,
   is_active BOOLEAN DEFAULT FALSE,
-  on_duration INTEGER DEFAULT 3,
-  interval_duration INTEGER DEFAULT 20,
+  on_duration INTEGER,
+  interval_duration INTEGER,
   start_time TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

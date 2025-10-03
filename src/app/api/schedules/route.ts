@@ -96,8 +96,8 @@ export async function GET(request: NextRequest) {
       manualOverrides,
       intervalMode: intervalData?.is_active || false,
       intervalConfig: intervalData ? {
-        onDuration: intervalData.on_duration || 3,
-        intervalDuration: intervalData.interval_duration || 20,
+        onDuration: intervalData.on_duration,
+        intervalDuration: intervalData.interval_duration,
         startTime: intervalData.start_time
       } : null,
       userSettings, // Added to response
@@ -254,8 +254,8 @@ export async function POST(request: NextRequest) {
           .upsert({
             device_id: deviceId,
             is_active: isActive,
-            on_duration: onDuration || 3,
-            interval_duration: intervalDuration || 20,
+            on_duration: onDuration,
+            interval_duration: intervalDuration,
             start_time: startTime ? new Date(startTime).toISOString() : null,
             updated_at: new Date().toISOString()
           }, {
