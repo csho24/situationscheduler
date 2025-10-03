@@ -8,3 +8,4 @@ WHERE device_id = 'a3cf493448182afaa9rlgw';
 -- UPDATE interval_mode 
 -- SET on_duration = NULL, interval_duration = NULL
 -- WHERE device_id = 'a3cf493448182afaa9rlgw';
+

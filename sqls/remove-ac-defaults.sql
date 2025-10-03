@@ -6,3 +6,4 @@ ALTER COLUMN on_duration DROP DEFAULT;
 
 ALTER TABLE interval_mode 
 ALTER COLUMN interval_duration DROP DEFAULT;
+
