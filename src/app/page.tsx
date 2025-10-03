@@ -451,6 +451,9 @@ export default function Home() {
         if (data.command) {
           console.log(`[${timestamp}] 🔧 Main Thread: Sending command - ${data.command.action} = ${data.command.value}`);
           tuyaAPI.controlDevice(data.command.device, data.command.action, data.command.value);
+          
+          // Update device state to reflect the command
+          setDeviceStates(prev => ({ ...prev, [data.command.device]: data.command.value }));
         }
       } else if (type === 'COUNTDOWN_UPDATE') {
         // Update countdown display without executing commands
@@ -545,6 +548,9 @@ export default function Home() {
         if (data.command) {
           console.log(`[${timestamp}] 🔧 Main Thread: Sending command - ${data.command.action} = ${data.command.value}`);
           tuyaAPI.controlDevice(data.command.device, data.command.action, data.command.value);
+          
+          // Update device state to reflect the command
+          setDeviceStates(prev => ({ ...prev, [data.command.device]: data.command.value }));
         }
       } else if (type === 'COUNTDOWN_UPDATE') {
         // Update countdown display without executing commands

@@ -209,6 +209,66 @@ export async function GET() {
     
     console.log(`📋 Schedule check complete. Executed ${executedActions.length} actions.`);
     
+    // Check interval mode for aircon device
+    try {
+      const intervalData = data.intervalConfig;
+      if (intervalData && intervalData.isActive && intervalData.startTime) {
+        console.log(`🔄 CRON: Checking interval mode for aircon`);
+        
+        const startTime = new Date(intervalData.startTime).getTime();
+        const now = Date.now();
+        const elapsed = Math.floor((now - startTime) / 1000);
+        const totalCycleTime = (intervalData.onDuration + intervalData.intervalDuration) * 60;
+        const cyclePosition = elapsed % totalCycleTime;
+        
+        // Calculate what the AC should be right now
+        const shouldBeOn = cyclePosition < (intervalData.onDuration * 60);
+        const currentPeriod = shouldBeOn ? 'ON' : 'OFF';
+        const remainingTime = shouldBeOn 
+          ? (intervalData.onDuration * 60) - cyclePosition
+          : totalCycleTime - cyclePosition;
+        
+        console.log(`🔄 CRON: Interval mode - ${currentPeriod} period, ${remainingTime}s remaining`);
+        
+        // Get current AC state
+        const baseUrl = process.env.NODE_ENV === 'production' ? 'https://situationscheduler.vercel.app' : 'http://localhost:3001';
+        const statusResponse = await fetch(`${baseUrl}/api/tuya?deviceId=a3cf493448182afaa9rlgw&action=status`);
+        const statusData = await statusResponse.json();
+        
+        // For aircon, we need to check if it's actually on/off
+        // Since aircon doesn't have switch_1 status, we'll assume it needs the command
+        // if the calculated state doesn't match what it should be
+        console.log(`🔄 CRON: Sending interval mode command - ${shouldBeOn ? 'ON' : 'OFF'}`);
+        
+        const commandResponse = await fetch(`${baseUrl}/api/tuya`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            deviceId: 'a3cf493448182afaa9rlgw',
+            action: 'ir_power',
+            value: shouldBeOn
+          })
+        });
+        
+        if (commandResponse.ok) {
+          const commandResult = await commandResponse.json();
+          console.log(`🔄 CRON: Interval mode command result:`, commandResult);
+          
+          executedActions.push({
+            deviceId: 'a3cf493448182afaa9rlgw',
+            deviceName: 'Air',
+            time: 'interval_mode',
+            action: shouldBeOn ? 'on' : 'off',
+            apiResult: commandResult.success ? 'success' : 'failed',
+            apiDetails: commandResult
+          });
+        }
+      }
+    } catch (error) {
+      console.error('❌ CRON: Interval mode check failed:', error);
+      // Don't fail the entire cron job if interval mode check fails
+    }
+    
     return NextResponse.json({
       success: true,
       message: isUsingDefault ? `Cron executed successfully (using default: ${situation})` : 'Cron executed successfully',
