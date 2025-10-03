@@ -576,7 +576,7 @@ This destructive DELETE operation was the root cause of the "deleted schedules r
 
 **This serves as a warning against implementing "solutions" without proper root cause analysis.**
 
-## SERVER-SIDE INTERVAL MODE BACKUP IMPLEMENTATION (October 3, 2025)
+## SERVER-SIDE INTERVAL MODE BACKUP - TO BE IMPLEMENTED (October 3, 2025)
 
 ### The Mobile Reliability Problem
 **User Issue**: Interval mode works perfectly on desktop but fails on mobile when:
@@ -586,10 +586,10 @@ This destructive DELETE operation was the root cause of the "deleted schedules r
 
 **Root Cause**: Mobile browsers are more aggressive than desktop browsers about throttling/killing Web Workers to save battery. When the phone locks, the Web Worker stops running, causing the AC to stay ON indefinitely.
 
-### The Solution: Server-Side Cron Backup
-**Implementation**: Added interval mode checking to the existing `/api/cron` route that runs every minute via Vercel cron jobs.
+### The Proposed Solution: Server-Side Cron Backup
+**Status**: NOT YET IMPLEMENTED - This is a planned solution that needs to be added to the existing `/api/cron` route that runs every minute via Vercel cron jobs.
 
-**What Was Added**:
+**What Needs To Be Added**:
 ```javascript
 // Check interval mode for aircon device
 try {
@@ -658,13 +658,14 @@ try {
 - **Mobile with locked phone**: Server backup ensures AC turns off (NEW)
 - **Mobile with backgrounded app**: Server backup ensures AC turns off (NEW)
 
-### Testing Results
-**Status**: Ready for mobile testing
+### Implementation Status
+**Status**: NOT YET IMPLEMENTED - This is a planned solution
 **Next Steps**: 
-1. Test interval mode on mobile phone
-2. Lock phone during interval mode
-3. Verify AC turns off when supposed to
-4. Check server logs for `🔄 CRON: Checking interval mode for aircon` messages
+1. Add interval mode checking to `/api/cron` route
+2. Test interval mode on mobile phone
+3. Lock phone during interval mode
+4. Verify AC turns off when supposed to
+5. Check server logs for `🔄 CRON: Checking interval mode for aircon` messages
 
 ### Implementation Details
 - **File Modified**: `/src/app/api/cron/route.ts`
@@ -679,7 +680,7 @@ try {
 - **Error Handling**: Graceful failure without breaking cron job
 - **Logging**: Comprehensive logging for debugging
 
-**This implementation provides a reliable safety net for mobile users while maintaining the existing high-precision Web Worker system for desktop users.**
+**This planned implementation would provide a reliable safety net for mobile users while maintaining the existing high-precision Web Worker system for desktop users.**
 
 ## CRITICAL MISTAKE: Tab Visibility "Fix" That Broke Everything (September 28, 2025)
 

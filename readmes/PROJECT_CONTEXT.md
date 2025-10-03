@@ -84,6 +84,36 @@ Note on interval mode storage:
 ### Logging Notes
 - Smart Life (Tuya) app manual actions do NOT appear in Vercel logs (they bypass our `/api/tuya`). Only actions initiated via our app/site are logged.
 
+**Where to Check Logs:**
+
+1. **Vercel Logs** (situationscheduler.vercel.app)
+   - Shows: **SCHEDULED** actions from cron jobs, calendar assignments, device schedule executions
+   - Shows: **MANUAL** actions from our web app (manual device controls via our UI)
+   - Does NOT show: Manual Smart Life app controls, manual device buttons
+   - Access: Vercel dashboard → Functions → View logs
+
+2. **Cron Jobs Website** (cron-job.org)
+   - Shows: **SCHEDULED** cron service calls to our `/api/cron` endpoint (timing only)
+   - Does NOT show: **MANUAL** actions, what happens inside our app
+   - Access: Your cron-job.org account dashboard
+
+3. **Tuya IoT Platform** (iot.tuya.com)
+   - Shows: **SCHEDULED** API commands from our app (cron jobs, interval mode)
+   - Shows: **MANUAL** API commands from our web app
+   - Does NOT show: Manual Smart Life app controls, manual device buttons
+   - Access: Tuya IoT Platform → Device logs
+
+4. **Smart Life App Device History**
+   - Shows: **SCHEDULED** smart plug actions (if they go through Smart Life)
+   - Shows: **MANUAL** smart plug actions from Smart Life app
+   - Does NOT show: IR device history (Aircon) - IR devices don't appear in device logs
+   - Does NOT show: Actions from our web app
+   - Access: Smart Life app → Device → History
+
+**Manual Action Types:**
+- **Manual via our web app**: Manual device controls through our UI (shows in Vercel logs, Tuya IoT)
+- **Manual via Smart Life app**: Direct device controls through Smart Life app (shows in Smart Life history, does NOT show in Vercel logs)
+
 ### Backup Requirements
 - **CRITICAL**: Supabase data is NOT in git - database exists only in cloud
 - Regular backups required to prevent data loss
