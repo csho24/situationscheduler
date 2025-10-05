@@ -4,8 +4,8 @@ let currentPeriod = 'ON';
 let lastCommandTime = 0;
 let onCountdown = 0;
 let offCountdown = 0;
-let onDuration = 3;
-let intervalDuration = 20;
+let onDuration = 0;
+let intervalDuration = 0;
 let startTime = 0;
 
 self.onmessage = function(e) {

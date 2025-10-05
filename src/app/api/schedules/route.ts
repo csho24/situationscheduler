@@ -246,29 +246,26 @@ export async function POST(request: NextRequest) {
     } else if (type === 'interval_mode') {
       // Update interval mode state
       const { deviceId, isActive, onDuration, intervalDuration, startTime } = payload;
-      console.log(`🔄 SERVER: Saving interval mode - deviceId: ${deviceId}, isActive: ${isActive}`);
-      
-      if (deviceId && typeof isActive === 'boolean') {
-        const { data, error } = await supabase
-          .from('interval_mode')
-          .upsert({
-            device_id: deviceId,
-            is_active: isActive,
-            on_duration: onDuration,
-            interval_duration: intervalDuration,
-            start_time: startTime ? new Date(startTime).toISOString() : null,
-            updated_at: new Date().toISOString()
-          }, {
-            onConflict: 'device_id'
-          })
-          .select();
-        
-        if (error) {
-          console.error('❌ Supabase error:', error);
-          throw error;
-        }
-        console.log(`🔄 SERVER: Interval mode ${isActive ? 'enabled' : 'disabled'} for ${deviceId}`, data);
+      console.log(`🔄 SERVER: Saving interval mode - deviceId: ${deviceId}, isActive: ${isActive}, onDuration: ${onDuration}, intervalDuration: ${intervalDuration}`);
+
+      const { data, error } = await supabase
+        .from('interval_mode')
+        .upsert({
+          device_id: deviceId,
+          is_active: isActive,
+          on_duration: onDuration,
+          interval_duration: intervalDuration,
+          start_time: startTime ? new Date(startTime).toISOString() : null,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'device_id'
+        });
+
+      if (error) {
+        console.error('❌ Supabase error:', error);
+        throw error;
       }
+      console.log(`🔄 SERVER: Interval mode ${isActive ? 'enabled' : 'disabled'} for ${deviceId}`, data);
     } else if (type === 'user_settings') {
       // Update user settings
       const { settingKey, settingValue } = payload;
