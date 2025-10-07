@@ -7,6 +7,7 @@ const SECRET = '0ef25f248d1f43828b829f2712f93573';
 const BASE_URL = 'https://openapi-sg.iotbing.com';
 
 async function getAccessToken(): Promise<string> {
+  // Always get fresh token - caching doesn't work reliably in serverless
   const timestamp = Date.now().toString();
   const stringToSign = `${ACCESS_ID}${timestamp}GET\n${crypto.createHash('sha256').update('').digest('hex')}\n\n/v1.0/token?grant_type=1`;
   const signature = crypto.createHmac('sha256', SECRET).update(stringToSign).digest('hex').toUpperCase();
@@ -23,6 +24,12 @@ async function getAccessToken(): Promise<string> {
   });
   
   const data = await response.json();
+  
+  if (!data.success) {
+    console.error('❌ Token request failed:', data);
+    throw new Error(`Token request failed: ${data.msg}`);
+  }
+  
   return data.result.access_token;
 }
 

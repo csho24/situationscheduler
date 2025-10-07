@@ -42,13 +42,8 @@ function generateBusinessSignature(
   };
 }
 
-let cachedToken: { token: string; expires: number } | null = null;
-
 async function getAccessToken(): Promise<string> {
-  if (cachedToken && Date.now() < cachedToken.expires) {
-    return cachedToken.token;
-  }
-
+  // Always get fresh token - caching doesn't work reliably in serverless
   const timestamp = Date.now().toString();
   const { headers } = generateTokenSignature(timestamp);
   
@@ -70,13 +65,7 @@ async function getAccessToken(): Promise<string> {
     throw new Error(`Token request failed: ${tokenData.msg}`);
   }
 
-  const expiresIn = tokenData.result.expire_time * 1000; // Convert to milliseconds
-  cachedToken = {
-    token: tokenData.result.access_token,
-    expires: Date.now() + expiresIn - 60000 // Refresh 1 minute early
-  };
-
-  return cachedToken.token;
+  return tokenData.result.access_token;
 }
 
 async function makeTuyaRequest(method: string, path: string, body?: unknown): Promise<Response> {
