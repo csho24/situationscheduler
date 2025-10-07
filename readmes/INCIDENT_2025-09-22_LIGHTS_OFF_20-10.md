@@ -173,4 +173,139 @@ The 8:10 PM problem was NOT about missing schedules - the schedules were always 
 ### Logging scope note
 - Manual actions performed via the Smart Life (Tuya) app do NOT appear in Vercel logs because they bypass our app's `/api/tuya` endpoint. Only actions initiated via our site are logged in Vercel.
 
+---
+
+## INCIDENT: Lights did NOT turn ON at 18:50 (October 7, 2025)
+
+### The Problem
+- **Date**: 2025-10-07
+- **Time**: 18:50 (6:50 PM SG)
+- **Device**: Lights (`a3e31a88528a6efc15yf4o`)
+- **Expected**: Lights ON at 18:50 (rest day schedule)
+- **Observed**: Lights remained OFF despite cron job returning "200 OK success"
+- **Pattern**: Works sometimes, fails randomly - erratic behavior
+
+### The Discovery
+**Vercel logs revealed the root cause:**
+```
+❌ Lights: API call failed: { 
+  code: 1010, 
+  msg: 'token invalid', 
+  success: false, 
+  t: 1759834211671, 
+  tid: '6600fa50a36b11f08993ae1e79aa0c37' 
+}
+```
+
+**Key findings:**
+1. Cron endpoint always returns `success: true` even when device commands fail
+2. Actual failure was buried in `executedActions` array with `apiResult: 'failed'`
+3. Tuya API rejected commands due to **invalid/expired authentication token**
+4. Issue was NOT cron blackout windows (that's a separate 20:08-20:10 issue)
+5. Issue was NOT device connectivity (token authentication problem)
+
+### Root Cause: Broken Token Caching in Serverless
+**The broken code pattern:**
+```typescript
+// Module-level cache - BROKEN in serverless!
+let cachedToken: { token: string; expires: number } | null = null;
+
+async function getAccessToken(): Promise<string> {
+  if (cachedToken && Date.now() < cachedToken.expires) {
+    return cachedToken.token;  // Stale token in old instance!
+  }
+  // ... fetch fresh token ...
+  cachedToken = { token, expires: Date.now() + expiresIn - 60000 };
+}
+```
+
+**Why it fails in Vercel serverless:**
+- Serverless instances are ephemeral and spin up/down unpredictably
+- Module-level variables don't persist reliably across instances
+- Instance A caches token, dies after 5 minutes
+- Instance B spins up with `null` cache OR stale token from old instance
+- No shared state between instances = random failures
+- Token expiry (~2 hours) doesn't matter when instances change constantly
+
+**Why it's erratic:**
+- ✅ Fresh instance gets new token → works
+- ❌ Old instance has stale/expired token → "token invalid" error
+- Completely random which instance handles each request
+
+### The Fix (Implemented 2025-10-07)
+**Removed all token caching - always fetch fresh:**
+```typescript
+async function getAccessToken(): Promise<string> {
+  // Always get fresh token - caching doesn't work reliably in serverless
+  const timestamp = Date.now().toString();
+  // ... fetch token logic ...
+  return tokenData.result.access_token;  // No caching!
+}
+```
+
+**Changes made:**
+- `/api/tuya/route.ts` - Removed `cachedToken` variable, always fetch fresh
+- `/api/cron/route.ts` - Added error handling for token failures, always fetch fresh
+- Both endpoints now get fresh Tuya API token on every request
+
+**Why this works:**
+- No reliance on stale cached tokens
+- Serverless instances can come and go - doesn't matter
+- Each API call gets its own fresh, valid token
+- Reliability over micro-optimization
+
+**Deployment:**
+- Committed: `5d963e1` - "Fix: Remove unreliable token caching in serverless functions - always fetch fresh Tuya API tokens"
+- Deployed to Vercel production immediately
+- Issue resolved ✅
+
+### Potential Future Issues (Risk Assessment)
+
+**Tuya API Rate Limiting Risk:**
+- Current solution = fetch fresh token for EVERY device command
+- Estimated usage:
+  - Cron jobs: 1,440 calls/day (every minute = 60 × 24)
+  - Each cron = 1 token fetch + device commands
+  - Manual controls: ~10-20/day
+  - Device status checks: varies with tab usage
+- **Total: ~1,500+ token fetches/day**
+- Tuya free tier limit: ~1,000-2,000 API calls/day
+- **RISK**: Close to edge, might hit throttling in future
+
+**What throttling looks like:**
+- Error: `code: 1003, msg: 'rate limit exceeded'` or similar
+- Device commands REJECTED (not slowed down)
+- Same symptom as "token invalid" - lights just don't turn on/off
+- Usually resets hourly or daily
+
+### NEXT: Proper Token Caching Solution (TODO)
+
+**Recommended: Store token in Supabase `user_settings` table**
+
+**Why Supabase:**
+- ✅ Already using it, FREE tier, no new infrastructure
+- ✅ Shared across ALL serverless instances (unlike module variables)
+- ✅ Unlimited API requests on free tier
+- ✅ Reduces Tuya API calls from ~1,500/day to ~12/day (1 token refresh every 2 hours)
+- ✅ Prevents future throttling issues
+
+**Implementation approach:**
+1. Create new setting: `tuya_token` and `tuya_token_expires` in `user_settings` table
+2. In `getAccessToken()`:
+   - Check Supabase for token and expiry
+   - If valid and not expired, return cached token
+   - If expired/missing, fetch fresh token and save to Supabase
+3. Token valid for ~2 hours, refresh 1 minute early
+4. Works reliably across all serverless instances
+
+**Benefits:**
+- ✅ Solves serverless caching problem properly
+- ✅ Prevents Tuya throttling
+- ✅ Free (Supabase unlimited API requests)
+- ✅ Set and forget - no future surprises
+
+**Status:** Not yet implemented - current "always fetch fresh" solution working but has throttling risk.
+
+---
+
 
