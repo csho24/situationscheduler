@@ -696,6 +696,100 @@ export default function Home() {
     // Start local scheduler for development
     startLocalScheduler();
     
+  }, [deviceStatesInitialized]);
+
+  // Sync device states when on device management tab
+  useEffect(() => {
+    console.log('🔍 SYNC DEBUG: useEffect triggered', { 
+      activeTab, 
+      deviceStatesInitialized, 
+      intervalMode,
+      timestamp: new Date().toISOString()
+    });
+    
+    let syncTimer: NodeJS.Timeout | null = null;
+    
+    const syncDeviceStates = async () => {
+      console.log('🔄 SYNC DEBUG: syncDeviceStates function called');
+      
+      // Update aircon state based on interval mode
+      setDeviceStates(prev => ({
+        ...prev,
+        'a3cf493448182afaa9rlgw': intervalMode
+      }));
+      console.log(`🌬️ SYNC DEBUG: Aircon set to ${intervalMode ? 'ON' : 'OFF'} based on interval mode`);
+      
+      // Check other devices' actual status
+      for (const device of DEVICES) {
+        if (device.id === 'a3cf493448182afaa9rlgw') continue; // Skip aircon, already handled
+        
+        try {
+          console.log(`📱 SYNC DEBUG: Checking ${device.name} (${device.id})`);
+          const status = await tuyaAPI.getDeviceStatus(device.id);
+          console.log(`📱 SYNC DEBUG: ${device.name} API response:`, status);
+          
+          let isOn = false;
+          if (status.result && (status.result as { status?: Array<{ code: string; value: boolean }> }).status) {
+            const switchStatus = (status.result as { status: Array<{ code: string; value: boolean }> }).status.find((item: { code: string; value: boolean }) => item.code === 'switch_1' || item.code === 'switch');
+            isOn = switchStatus ? Boolean(switchStatus.value) : false;
+          }
+          
+          console.log(`📱 SYNC DEBUG: ${device.name} determined status: ${isOn}`);
+          
+          setDeviceStates(prev => {
+            if (prev[device.id] !== isOn) {
+              console.log(`📱 SYNC DEBUG: ${device.name} UI state change (${prev[device.id]} → ${isOn})`);
+              return { ...prev, [device.id]: isOn };
+            }
+            console.log(`📱 SYNC DEBUG: ${device.name} no change needed (${prev[device.id]} === ${isOn})`);
+            return prev;
+          });
+        } catch (error) {
+          console.error(`❌ SYNC DEBUG: Error syncing ${device.name} status:`, error);
+        }
+      }
+    };
+
+    // Sync when on device management tab
+    if (activeTab === 'status' && deviceStatesInitialized) {
+      // Immediate sync when switching to tab (no delay)
+      console.log('⚡ SYNC DEBUG: Immediate sync on tab switch');
+      syncDeviceStates();
+      
+      // Set up continuous polling every 5 seconds while on the tab
+      console.log('🔄 SYNC DEBUG: Setting up 5-second continuous polling');
+      syncTimer = setInterval(() => {
+        console.log('🔄 SYNC DEBUG: 5-second poll - calling syncDeviceStates');
+        syncDeviceStates();
+      }, 5000);
+    } else {
+      console.log('❌ SYNC DEBUG: Not setting sync', { 
+        activeTabIsStatus: activeTab === 'status', 
+        deviceStatesInitialized 
+      });
+    }
+
+    return () => {
+      console.log('🧹 SYNC DEBUG: Cleanup function called');
+      if (syncTimer) {
+        console.log('🧹 SYNC DEBUG: Clearing timeout');
+        clearTimeout(syncTimer);
+      }
+    };
+  }, [activeTab, deviceStatesInitialized]);
+
+  // Separate useEffect for AC updates when interval mode changes
+  useEffect(() => {
+    if (deviceStatesInitialized) {
+      console.log('🌬️ AC DEBUG: Updating AC state based on interval mode change', intervalMode);
+      setDeviceStates(prev => ({
+        ...prev,
+        'a3cf493448182afaa9rlgw': intervalMode
+      }));
+    }
+  }, [intervalMode, deviceStatesInitialized]);
+
+  useEffect(() => {
               // Sync device schedules to server after mount
               // No sync - read-only from Supabase
 

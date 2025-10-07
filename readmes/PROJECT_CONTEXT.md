@@ -119,6 +119,13 @@ Note on interval mode storage:
 - Regular backups required to prevent data loss
 - Current backup: `supabase-backup-2025-09-28-13-00.sql`
 
+### Device Management Tab Sync (October 7, 2025)
+**Current sync behavior:**
+- **Tab switch**: Immediate sync (no delay) when switching to Device Management tab
+- **While on tab**: Continuous polling every 5 seconds for real-time updates
+- **AC updates**: Immediate updates when interval mode changes
+- **All devices**: Sync correctly without requiring page refresh
+
 ### Recent Major Changes (Sep 27-30, 2025)
 - **Data Loss Fix**: Removed destructive code that was deleting schedules on every edit
 - **Supabase Sync Fixes**: Fixed cron job reading from old files instead of Supabase
@@ -214,3 +221,13 @@ Note on interval mode storage:
 - Add idempotency to `/api/cron` to handle duplicate calls safely
 - Implement execution logging for debugging
 - Create monitoring dashboard for cron health
+
+### Deployment Notes
+**CRITICAL**: Do NOT add `vercel.json` with cron configurations - deployment will fail.
+
+**External Cron Setup**: Project uses external cron-job.org service, NOT Vercel cron jobs.
+
+**If deployment fails**:
+1. Check if `vercel.json` exists and remove it
+2. Verify no Vercel cron configurations in project
+3. Ensure external cron service is properly configured
