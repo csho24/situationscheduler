@@ -219,8 +219,18 @@ export async function GET() {
     // Check interval mode for aircon device
     try {
       const intervalData = data.intervalConfig;
+      console.log(`🔄 CRON: Interval mode data:`, JSON.stringify(intervalData));
+      
+      if (!intervalData) {
+        console.log(`🔄 CRON: No interval mode data found`);
+      } else if (!intervalData.isActive) {
+        console.log(`🔄 CRON: Interval mode is NOT active (isActive=${intervalData.isActive})`);
+      } else if (!intervalData.startTime) {
+        console.log(`🔄 CRON: Interval mode active but NO startTime`);
+      }
+      
       if (intervalData && intervalData.isActive && intervalData.startTime) {
-        console.log(`🔄 CRON: Checking interval mode for aircon`);
+        console.log(`🔄 CRON: Checking interval mode for aircon - ACTIVE with startTime`);
         
         const startTime = new Date(intervalData.startTime).getTime();
         const now = Date.now();

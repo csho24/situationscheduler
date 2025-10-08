@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { createClient } from '@supabase/supabase-js';
 
 const ACCESS_ID = 'enywhg3tuc4nkjuc4tfk';
 const SECRET = '0ef25f248d1f43828b829f2712f93573';
 const BASE_URL = 'https://openapi-sg.iotbing.com'; // Correct Singapore endpoint
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 function generateTokenSignature(timestamp: string, body: string = ''): { headers: Record<string, string> } {
   const stringToSign = `${ACCESS_ID}${timestamp}GET\n${crypto.createHash('sha256').update(body).digest('hex')}\n\n/v1.0/token?grant_type=1`;
@@ -43,7 +50,28 @@ function generateBusinessSignature(
 }
 
 async function getAccessToken(): Promise<string> {
-  // Always get fresh token - caching doesn't work reliably in serverless
+  // Check Supabase for cached token
+  try {
+    const { data: cachedData } = await supabase
+      .from('user_settings')
+      .select('setting_value')
+      .eq('setting_key', 'tuya_token_cache')
+      .single();
+    
+    if (cachedData && cachedData.setting_value) {
+      const cache = JSON.parse(cachedData.setting_value);
+      // Check if token is still valid (not expired)
+      if (cache.expires && Date.now() < cache.expires) {
+        console.log('✅ Using cached Tuya token from Supabase');
+        return cache.token;
+      }
+    }
+  } catch (error) {
+    // No cached token or error reading - continue to fetch fresh token
+    console.log('No cached token, fetching fresh one');
+  }
+  
+  // Fetch fresh token from Tuya
   const timestamp = Date.now().toString();
   const { headers } = generateTokenSignature(timestamp);
   
@@ -65,7 +93,25 @@ async function getAccessToken(): Promise<string> {
     throw new Error(`Token request failed: ${tokenData.msg}`);
   }
 
-  return tokenData.result.access_token;
+  const accessToken = tokenData.result.access_token;
+  const expiresIn = tokenData.result.expire_time * 1000; // Convert to milliseconds
+  const expires = Date.now() + expiresIn - 60000; // Refresh 1 minute early
+  
+  // Cache token in Supabase
+  try {
+    await supabase
+      .from('user_settings')
+      .upsert({
+        setting_key: 'tuya_token_cache',
+        setting_value: JSON.stringify({ token: accessToken, expires })
+      }, { onConflict: 'setting_key' });
+    console.log('✅ Cached Tuya token in Supabase');
+  } catch (error) {
+    console.error('Failed to cache token:', error);
+    // Continue anyway - token is still valid even if caching fails
+  }
+
+  return accessToken;
 }
 
 async function makeTuyaRequest(method: string, path: string, body?: unknown): Promise<Response> {

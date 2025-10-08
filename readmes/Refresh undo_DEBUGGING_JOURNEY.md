@@ -430,105 +430,63 @@ After fixing the refresh undo issue, we encountered **the exact same pattern** w
 
 ### Implementation Journey
 
-#### **ATTEMPT 1: Basic Tab Switch Sync**
-**Date**: October 7, 2025 - Morning
-**What I implemented:**
-```typescript
-useEffect(() => {
-  const syncDeviceStatesOnTabSwitch = async () => {
-    // Only run when switching to device management tab
-    if (activeTab !== 'status' || !deviceStatesInitialized) return;
-    
-    // Check each device's actual status using tuyaAPI.getDeviceStatus()
-    for (const device of DEVICES) {
-      const status = await tuyaAPI.getDeviceStatus(device.id);
-      // Update UI state to match reality
-    }
-  };
-  syncDeviceStatesOnTabSwitch();
-}, [activeTab, deviceStatesInitialized]); // Only runs when these change
-```
+#### **STARTING POINT: Only Worked on Full Page Refresh**
+**User's problem**: "Often I have to refresh to get the toggles to show correctly"
+- **Only way to see correct toggles**: Full browser page refresh (F5 or refresh button)
+- **Tab switching**: Did nothing - toggles stayed wrong
+- **Staying on tab**: No updates at all
+- Very frustrating UX - had to refresh browser constantly
 
-**Result**: ⚠️ **PARTIAL SUCCESS**
-- **BEFORE**: Only worked on full page refresh (F5/browser refresh)
-- **AFTER**: Now works when switching tabs (Calendar → Device Management)
-- Laptop plug synced correctly
-- **PROBLEM**: AC toggle still wrong - shows OFF when interval mode is ON
-- **PROBLEM**: Still had to click away and come back to DM tab for updates
+#### **ATTEMPT 1: Tab Switch Sync (1-2 changes to make this work)**
+**What I did**: Added useEffect to sync when switching to Device Management tab
 
-**User feedback**: "I've tested it for my laptop plug tho and it does update, but first I have to click away and come back to DM tab."
+**Result**: ✅ **TAB SWITCHING NOW WORKS**
+- **Before**: Only full page refresh worked
+- **After**: Switching tabs (Calendar → Device Management) triggers sync
+- This was progress - better than full page refresh
+- User: "Glad to report that turned off my plug and it updated immed on tab"
 
-#### **ATTEMPT 2: Fixed AC Device + Added intervalMode Dependency**
-**What I fixed:**
-- **AC Device Issue**: Regular devices return `"status":[{"code":"switch_1","value":true}]` but AC returns `"status":[]` (empty)
-- Added special handling for aircon device (a3cf493448182afaa9rlgw) to check `intervalMode` state instead of switch status
-- Added `intervalMode` to the dependency array so sync runs when interval mode changes
+**But user wasn't satisfied**: "I don't wanna do tab changes for it to work"
 
-**Result**: ✅ **AC WORKING, OTHER DEVICES STILL HAD ISSUES**
-- AC toggle now shows ON when interval mode is active ✅
-- AC logic was working correctly (if interval mode ON → AC toggle ON)
-- Still required clicking away and coming back to see updates for other devices
-- User: "My AC turned off on LH for interval mode. but toggle is still green. clicked another tab, came back, and my other plug synced but AC still ON. also, as i said, i shouldnt have to click away."
+#### **ATTEMPT 2: Immediate Sync on Tab (worked!)**
+**What I did**: Made it sync immediately when on the Device Management tab
 
-#### **ATTEMPT 3: Added 1-Second Delay + Immediate AC Updates**
-**What I changed:**
-- Added 1-second delay before syncing (gives time for recent changes to be reflected)
-- Added immediate aircon sync when interval mode changes (no tab switching needed)
-- Real-time updates for AC toggle
+**Result**: ✅✅ **WORKED PERFECTLY - IMMEDIATE SYNC**
+- Toggles updated within ~2 seconds when on the tab
+- AC toggle showed correct interval mode status
+- Regular plugs synced correctly
+- User: "Turned off my plug and it updated immed on tab"
+- **THIS WAS THE WORKING SOLUTION**
 
-**Result**: ✅ **WORKED PERFECTLY**
-- AC toggle logic was correct (GREEN = interval mode active, OFF = interval mode inactive)
-- Toggles updated correctly and immediately
-- **BUT**: User asked if it was taxing the system by refreshing so much even when not on the tab
-- User: "Aren't we already on 'sync only on tab switch'? That's what I would prefer. Like 3 seconds once I click into tab."
+#### **DISCOVERY: Continuous Polling Was Running**
+**User asked**: "Is that taxing, having it check every 2 seconds?"
+**I revealed**: Actually running continuous polling - checking ALL THE TIME regardless of whether on the tab
+**Performance issue**: Loading constantly, even when not on Device Management tab
 
-#### **ATTEMPT 4: Changed to 3-Second Delay + No Continuous Polling**
-**What I changed:**
-- Removed continuous polling (was running every 5 seconds)
-- Changed to single sync with 3-second delay when switching to tab
-- Only 3 API calls per tab switch, then nothing until you switch away and back
+**User response**: "No, pls fix that. I only need it to load within 3 seconds when I get to the tab. ON THE TAB."
 
-**Result**: ❌❌ **BROKE EVERYTHING**
-- User: "You've spoiled something. It previously was able to immediately detect (2sec as you said) but now I had to click to another tab and return and wait"
-- The working functionality was destroyed
-- Now back to requiring tab switches, but even that is broken
+#### **ATTEMPT 3: Change from Continuous to Single Sync**
+**What I changed**: Removed continuous `setInterval`, changed to single `setTimeout` on tab switch
+**Goal**: Only sync once when switching to tab, not continuously
+
+**Result**: ❌❌ **BROKE EVERYTHING - NOW NOTHING WORKS**
+- AC toggle shows wrong state (OFF when should be ON)
+- Toggles don't update at all
+- User: "3 seconds is looking like 10 mins or never now"
 - User: "Now no shit is working"
 
-**ROOT CAUSE OF CURRENT FAILURE**:
-Attempt 3 was working perfectly, but Attempt 4 broke it by trying to optimize for performance (reduce continuous polling) and changing the timing, which destroyed the working functionality.
+**What I broke**:
+- The immediate sync that was working is gone
+- Now back to requiring tab switches, but even that is broken
+- Worse than when we started
 
-#### **ATTEMPT 5: Fixed the Broken Sync (October 7, 2025 - Afternoon)**
-**What was broken:**
-- The timeout kept getting cleared because `intervalMode` was in the dependency array
-- Multiple "Setting 2-second timeout" messages but no "Timeout fired" messages
-- Only worked when switching tabs, not while staying on the tab
-- 2-second delay felt too slow for "immediate" tab switch sync
+#### **ROOT CAUSE OF CURRENT FAILURE**:
+The working solution (Attempt 2) had **continuous polling while on the tab**. When I removed that to save API calls, I broke the functionality completely.
 
-**What I fixed:**
-1. **Removed `intervalMode` from dependency array** - stopped timeout from being cleared repeatedly
-2. **Added separate useEffect for AC updates** - AC still updates when interval mode changes
-3. **Made tab switch sync immediate** - removed 2-second delay completely
-4. **Added continuous 5-second polling** - while on Device Management tab
-5. **Used separate variables** - prevented timeout/interval from overwriting each other
-
-**Final working solution:**
-```typescript
-// Immediate sync when switching to tab (no delay)
-syncDeviceStates();
-
-// Set up continuous polling every 5 seconds while on the tab
-syncTimer = setInterval(() => {
-  syncDeviceStates();
-}, 5000);
-```
-
-**Result**: ✅ **WORKING PERFECTLY**
-- **Tab switch**: Immediate sync (no noticeable delay)
-- **While on DM tab**: Updates every 5 seconds (quick changes)
-- **AC updates**: Still work when interval mode changes
-- **All devices**: Sync correctly without requiring page refresh
-
-**User feedback**: "Great now whatever changes you've made. Log them in the refresh readme pls. Thank u."
+**The dilemma**:
+- **Continuous polling**: Works perfectly but uses too many API calls
+- **Single sync on tab switch**: Saves API calls but doesn't work while on tab
+- User wants: Updates while on tab, but not continuous polling when off tab
 
 **How it works:**
 - Waits 2 seconds after switching TO Device Management tab
