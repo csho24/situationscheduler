@@ -6,11 +6,13 @@ const ACCESS_ID = 'enywhg3tuc4nkjuc4tfk';
 const SECRET = '0ef25f248d1f43828b829f2712f93573';
 const BASE_URL = 'https://openapi-sg.iotbing.com'; // Correct Singapore endpoint
 
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Lazy Supabase client initialization (only when needed, not at module load)
+function getSupabaseClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
 function generateTokenSignature(timestamp: string, body: string = ''): { headers: Record<string, string> } {
   const stringToSign = `${ACCESS_ID}${timestamp}GET\n${crypto.createHash('sha256').update(body).digest('hex')}\n\n/v1.0/token?grant_type=1`;
@@ -51,6 +53,8 @@ function generateBusinessSignature(
 
 async function getAccessToken(): Promise<string> {
   // Check Supabase for cached token
+  const supabase = getSupabaseClient();
+  
   try {
     const { data: cachedData } = await supabase
       .from('user_settings')
