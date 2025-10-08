@@ -96,6 +96,7 @@ export async function GET(request: NextRequest) {
       manualOverrides,
       intervalMode: intervalData?.is_active || false,
       intervalConfig: intervalData ? {
+        isActive: intervalData.is_active,
         onDuration: intervalData.on_duration,
         intervalDuration: intervalData.interval_duration,
         startTime: intervalData.start_time
