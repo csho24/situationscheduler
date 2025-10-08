@@ -380,8 +380,26 @@ async function getAccessToken(): Promise<string> {
 
 **Deployment:**
 - Committed: `b9460fd` - "Fix: Add Supabase token caching + enhanced interval mode cron logging"
+- **Build failed**: Supabase client initialization at module load time
+- Fixed: `a565537` - "Fix: Lazy Supabase client initialization to fix build error"
+- Changed: `const supabase = createClient()` → `function getSupabaseClient()` (lazy initialization)
 - Deployed to Vercel production: October 8, 2025
 - Status: ✅ **IMPLEMENTED AND DEPLOYED**
+
+**Safety Notes:**
+- ✅ NO destructive code - only additions
+- ✅ NO existing functionality removed or modified
+- ✅ NO data deletion operations
+- ✅ Graceful fallback if cache fails
+- ✅ Existing token fetch logic unchanged
+- ✅ Existing device control logic unchanged
+
+**Code Changes:**
+1. **Added** Supabase client function (lazy initialization)
+2. **Added** token cache checking before fetch
+3. **Added** token caching after fetch
+4. **Preserved** all existing token fetch logic
+5. **Preserved** all existing device control logic
 
 **Expected Behavior:**
 - First API call: Fetches fresh token, caches in Supabase
