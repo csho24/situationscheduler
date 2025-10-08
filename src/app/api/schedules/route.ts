@@ -97,8 +97,8 @@ export async function GET(request: NextRequest) {
       intervalMode: intervalData?.is_active || false,
       intervalConfig: intervalData ? {
         isActive: intervalData.is_active,
-        onDuration: intervalData.on_duration,
-        intervalDuration: intervalData.interval_duration,
+        onDuration: intervalData.on_duration || 10,  // Default to last known good values or 10
+        intervalDuration: intervalData.interval_duration || 16,  // Default to 16
         startTime: intervalData.start_time
       } : null,
       userSettings, // Added to response

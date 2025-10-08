@@ -300,8 +300,8 @@ export default function Home() {
   const [offCountdown, setOffCountdown] = useState(0);
   const [isOnPeriod, setIsOnPeriod] = useState(true);
   const [showIntervalConfig, setShowIntervalConfig] = useState(true);
-  const [onDuration, setOnDuration] = useState(0);
-  const [intervalDuration, setIntervalDuration] = useState(0);
+  const [onDuration, setOnDuration] = useState(10);  // Default to 10 min, never 0
+  const [intervalDuration, setIntervalDuration] = useState(16);  // Default to 16 min, never 0
   const [intervalStartTime, setIntervalStartTime] = useState<number | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastCommandTime = useRef<number>(0);
@@ -375,8 +375,9 @@ export default function Home() {
         
         // Load user's configuration if available
         if (data.intervalConfig) {
-          setOnDuration(data.intervalConfig.onDuration);
-          setIntervalDuration(data.intervalConfig.intervalDuration);
+          // Never show 0 - use last input or reasonable defaults
+          setOnDuration(data.intervalConfig.onDuration || 10);
+          setIntervalDuration(data.intervalConfig.intervalDuration || 16);
           
           if (data.intervalMode && data.intervalConfig.startTime) {
             // If interval mode was active, keep config open and resume

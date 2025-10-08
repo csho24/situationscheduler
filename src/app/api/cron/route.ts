@@ -232,6 +232,7 @@ export async function GET() {
       if (intervalData && intervalData.isActive && intervalData.startTime) {
         console.log(`🔄 CRON: Checking interval mode for aircon - ACTIVE with startTime`);
         
+        const baseUrl = process.env.NODE_ENV === 'production' ? 'https://situationscheduler.vercel.app' : 'http://localhost:3001';
         const startTime = new Date(intervalData.startTime).getTime();
         const now = Date.now();
         const elapsed = Math.floor((now - startTime) / 1000);
@@ -247,38 +248,53 @@ export async function GET() {
         
         console.log(`🔄 CRON: Interval mode - ${currentPeriod} period, ${remainingTime}s remaining`);
         
-        // Get current AC state
-        const baseUrl = process.env.NODE_ENV === 'production' ? 'https://situationscheduler.vercel.app' : 'http://localhost:3001';
-        const statusResponse = await fetch(`${baseUrl}/api/tuya?deviceId=a3cf493448182afaa9rlgw&action=status`);
-        const statusData = await statusResponse.json();
+        // Check if we need to send command (only send when transitioning)
+        // Track last state in user_settings to avoid sending same command repeatedly
+        const lastStateResponse = await fetch(`${baseUrl}/api/schedules`);
+        const lastStateData = await lastStateResponse.json();
+        const lastIntervalState = lastStateData?.userSettings?.interval_mode_last_state;
+        const lastState = lastIntervalState === 'true'; // was AC on last time we checked?
         
-        // For aircon, we need to check if it's actually on/off
-        // Since aircon doesn't have switch_1 status, we'll assume it needs the command
-        // if the calculated state doesn't match what it should be
-        console.log(`🔄 CRON: Sending interval mode command - ${shouldBeOn ? 'ON' : 'OFF'}`);
-        
-        const commandResponse = await fetch(`${baseUrl}/api/tuya`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            deviceId: 'a3cf493448182afaa9rlgw',
-            action: 'ir_power',
-            value: shouldBeOn
-          })
-        });
-        
-        if (commandResponse.ok) {
-          const commandResult = await commandResponse.json();
-          console.log(`🔄 CRON: Interval mode command result:`, commandResult);
+        // Only send command if state changed
+        if (lastState !== shouldBeOn) {
+          console.log(`🔄 CRON: State changed (${lastState ? 'ON' : 'OFF'} → ${shouldBeOn ? 'ON' : 'OFF'}), sending command`);
           
-          executedActions.push({
-            deviceId: 'a3cf493448182afaa9rlgw',
-            deviceName: 'Air',
-            time: 'interval_mode',
-            action: shouldBeOn ? 'on' : 'off',
-            apiResult: commandResult.success ? 'success' : 'failed',
-            apiDetails: commandResult
+          const commandResponse = await fetch(`${baseUrl}/api/tuya`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              deviceId: 'a3cf493448182afaa9rlgw',
+              action: 'ir_power',
+              value: shouldBeOn
+            })
           });
+          
+          if (commandResponse.ok) {
+            const commandResult = await commandResponse.json();
+            console.log(`🔄 CRON: Interval mode command result:`, commandResult);
+            
+            // Save new state to prevent duplicate commands
+            await fetch(`${baseUrl}/api/schedules`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: 'user_settings',
+                setting_key: 'interval_mode_last_state',
+                setting_value: shouldBeOn.toString()
+              })
+            });
+            
+            executedActions.push({
+              deviceId: 'a3cf493448182afaa9rlgw',
+              deviceName: 'Air',
+              time: 'interval_mode',
+              action: shouldBeOn ? 'on' : 'off',
+              apiResult: commandResult.success ? 'success' : 'failed',
+              apiDetails: commandResult
+            });
+          }
+        } else {
+          console.log(`🔄 CRON: AC already in correct state (${shouldBeOn ? 'ON' : 'OFF'}), no command needed`);
         }
       }
     } catch (error) {
