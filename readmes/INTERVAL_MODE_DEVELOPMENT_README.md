@@ -1106,3 +1106,107 @@ intervalId = setInterval(() => {
 - `/public/interval-worker.js`: Removed hardcoded defaults, now uses passed parameters
 
 **Status**: ✅ **FIXED** - User's typed values should now persist correctly
+
+---
+
+## INVESTIGATION: Window Closure Issue - Server-Side Cron Not Working (October 8, 2025)
+
+### The Problem
+**User-reported issue**: Interval mode does NOT work when browser window is completely closed, despite server-side cron backup being implemented.
+
+**Evidence:**
+- Regular scheduled lights work perfectly when window closed (cron working ✅)
+- Interval mode stops working when window closed (cron interval logic broken ❌)
+- Server-side interval mode code exists in `/api/cron/route.ts` (lines 219-277)
+- Code was implemented October 3, 2025 but never verified working
+- User has tested multiple times - confirmed not working
+
+### Root Cause Investigation (October 8, 2025)
+
+**Theory**: Cron infrastructure works (proven by scheduled lights), but interval mode checking code within cron has a bug preventing it from executing AC commands.
+
+**Possible causes:**
+1. **Database query issue**: `intervalConfig` data not loading properly in cron
+2. **State management issue**: `isActive` or `startTime` not persisting when window closes
+3. **Logic bug**: Calculation or command sending failing silently
+4. **API issue**: IR aircon commands failing from cron context
+
+### Debugging Steps Taken (October 8, 2025)
+
+**Added Enhanced Diagnostic Logging to Cron:**
+File: `/src/app/api/cron/route.ts` (lines 219-250)
+
+```typescript
+// Check interval mode for aircon device
+try {
+  const intervalData = data.intervalConfig;
+  console.log(`🔄 CRON: Interval mode data:`, JSON.stringify(intervalData));
+  
+  if (!intervalData) {
+    console.log(`🔄 CRON: No interval mode data found`);
+  } else if (!intervalData.isActive) {
+    console.log(`🔄 CRON: Interval mode is NOT active (isActive=${intervalData.isActive})`);
+  } else if (!intervalData.startTime) {
+    console.log(`🔄 CRON: Interval mode active but NO startTime`);
+  }
+  
+  if (intervalData && intervalData.isActive && intervalData.startTime) {
+    console.log(`🔄 CRON: Checking interval mode for aircon - ACTIVE with startTime`);
+    // ... existing interval mode logic ...
+  }
+} catch (error) {
+  console.error('❌ CRON: Interval mode check failed:', error);
+}
+```
+
+**What the Diagnostic Logs Will Reveal:**
+1. **If `intervalData` is null/undefined**: `/api/schedules` not returning interval mode data
+2. **If `isActive` is false**: Something is deactivating interval mode when window closes
+3. **If `startTime` is null**: Data exists but critical timestamp missing
+4. **If all conditions pass but still fails**: Bug in calculation or command execution
+
+**Deployment:**
+- Committed: `b9460fd` - "Fix: Add Supabase token caching + enhanced interval mode cron logging"
+- Deployed to Vercel production: October 8, 2025
+- Status: ✅ **DIAGNOSTIC LOGGING DEPLOYED**
+
+### Testing Plan
+
+**Steps to identify root cause:**
+1. Start interval mode on deployed site (`situationscheduler.vercel.app`)
+2. Verify interval mode is active in database (check Supabase `interval_mode` table)
+3. Close browser window completely
+4. Wait 2-3 minutes (at least 2 cron cycles)
+5. Check Vercel function logs for diagnostic messages:
+   - Look for `🔄 CRON: Interval mode data:` - see what data cron receives
+   - Look for conditional messages (no data, not active, no startTime)
+   - Look for `🔄 CRON: Checking interval mode for aircon - ACTIVE` - confirms conditions met
+   - Look for command execution logs
+6. Identify which condition is failing or if commands are being sent but failing
+
+**Expected Outcomes:**
+- **Scenario A**: No interval data found → Fix `/api/schedules` to include interval config
+- **Scenario B**: isActive=false → Fix state persistence when window closes
+- **Scenario C**: No startTime → Fix startTime storage in database
+- **Scenario D**: All conditions pass but no commands → Fix command execution logic
+
+**Current Status:** 
+- ✅ Diagnostic logging deployed
+- ⏳ Awaiting test execution to identify root cause
+- ❌ Interval mode still not working when window closed
+
+### Technical Context
+
+**Why this SHOULD work:**
+- External cron service (cron-job.org) runs server-side every minute
+- Cron successfully executes scheduled device commands (proven by lights working)
+- Interval mode code runs in same cron endpoint after schedule checking
+- Should be completely independent of browser/window state
+- Database-driven approach should persist across sessions
+
+**Why it's NOT working:**
+- Unknown - requires diagnostic log analysis to determine root cause
+- Something is preventing the interval mode checking code from executing properly
+- Could be data loading, state management, or command execution issue
+
+---
