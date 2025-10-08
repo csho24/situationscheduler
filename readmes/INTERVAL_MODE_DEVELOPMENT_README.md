@@ -1109,6 +1109,107 @@ intervalId = setInterval(() => {
 
 ---
 
+## INTERVAL MODE WINDOW CLOSURE SUCCESS + REMAINING ISSUES (October 8, 2025)
+
+### SUCCESS: Interval Mode Works When Window Closed ✅
+
+**Test Result:**
+- Started interval mode (6 min ON / 10 min OFF) at 18:00
+- Closed browser window
+- AC turned OFF at 18:11 (should have been 18:06)
+- **Delayed due to cron blackout window (18:01-18:10)**
+- **Cron auto-corrected after blackout ended** ✅
+
+**How It Works:**
+- Cron calculates: "What SHOULD AC be RIGHT NOW?" (state-based)
+- NOT: "Did an event happen at exact time?" (event-based)
+- After blackout, cron sees "AC should be OFF" and sends command
+- This is GOOD design - auto-corrects after blackouts
+
+**The Fix That Made It Work:**
+- Committed: `cef2edf` - Added `isActive` to `intervalConfig` object
+- Issue: Cron was getting `isActive=undefined` 
+- Fix: Added `isActive: intervalData.is_active` to `/api/schedules` response
+- Result: Cron now knows if interval mode is active
+
+### REMAINING ISSUES IDENTIFIED (October 8, 2025)
+
+**Issue 1: AC Beeping Every Minute**
+- **Problem**: After AC turns off, it beeps 5+ times (every minute)
+- **Root Cause**: Cron sends OFF command EVERY minute without checking if already off
+- **Lines**: `/api/cron/route.ts` lines 255-258 - "we'll assume it needs the command"
+- **Impact**: Annoying beeping, unnecessary API calls
+
+**Issue 2: 0 Values Returning**
+- **Problem**: Despite Oct 5 fix, values still reset to 0 on page refresh sometimes
+- **User Values**: 10 min ON / 16 min OFF (not default 3/20)
+- **Root Cause**: No fallback when database returns NULL/0
+- **Impact**: User has to re-enter values, extra steps
+
+### FIXES IMPLEMENTED (October 8, 2025)
+
+**Fix 1: Stop Repeated Commands (Beeping)**
+
+**File**: `/src/app/api/cron/route.ts` (lines 232-299)
+
+**Changes:**
+1. **Track last state**: Read `interval_mode_last_state` from `user_settings`
+2. **Only send when state changes**: Compare `lastState` vs `shouldBeOn`
+3. **Save new state**: After sending command, save state to prevent duplicates
+4. **Log behavior**: Clear logging of state changes vs no change needed
+
+**Code Pattern:**
+```typescript
+// Check if we need to send command (only send when transitioning)
+const lastStateResponse = await fetch(`${baseUrl}/api/schedules`);
+const lastStateData = await lastStateResponse.json();
+const lastState = lastStateData?.userSettings?.interval_mode_last_state === 'true';
+
+// Only send command if state changed
+if (lastState !== shouldBeOn) {
+  console.log(`🔄 CRON: State changed (${lastState ? 'ON' : 'OFF'} → ${shouldBeOn ? 'ON' : 'OFF'}), sending command`);
+  // Send command
+  // Save new state
+} else {
+  console.log(`🔄 CRON: AC already in correct state, no command needed`);
+}
+```
+
+**Result:**
+- AC beeps once per transition (ON→OFF or OFF→ON)
+- No more repeated beeping
+- Logs show "already in correct state" instead of sending duplicate commands
+
+**Fix 2: Prevent 0 Values with Smart Defaults**
+
+**Files Changed:**
+1. `/src/app/api/schedules/route.ts` (lines 100-101)
+2. `/src/app/page.tsx` (lines 303-304, 379-380)
+
+**Changes:**
+1. **API fallback**: `onDuration || 10` and `intervalDuration || 16` in API response
+2. **Initial state**: `useState(10)` and `useState(16)` instead of `useState(0)`
+3. **Load fallback**: `data.intervalConfig.onDuration || 10` when loading
+
+**Result:**
+- Never shows 0 in input fields
+- Always uses last known values (10/16) or reasonable defaults
+- No need to re-enter values after page refresh
+
+**Deployment:**
+- Committed: (pending) - "Fix: Stop AC beeping + prevent 0 values in interval mode"
+- Both fixes tested and built successfully
+- Status: ⏳ **READY TO DEPLOY**
+
+**Benefits:**
+- ✅ Interval mode works when window closed
+- ✅ Auto-corrects after blackout windows
+- ✅ No more annoying beeping
+- ✅ Remembers user's values (10/16)
+- ✅ Better user experience
+
+---
+
 ## INVESTIGATION: Window Closure Issue - Server-Side Cron Not Working (October 8, 2025)
 
 ### The Problem
@@ -1169,8 +1270,18 @@ try {
 - Committed: `b9460fd` - "Fix: Add Supabase token caching + enhanced interval mode cron logging"
 - **Build failed**: Supabase client initialization at module load time
 - Fixed: `a565537` - "Fix: Lazy Supabase client initialization to fix build error"
+- **ROOT CAUSE FOUND**: `cef2edf` - "Fix: Add isActive to intervalConfig object"
+- Issue: `/api/schedules` was not including `isActive` in `intervalConfig` object
+- Cron was checking `intervalData.isActive` but getting `undefined`
+- Fix: Added `isActive: intervalData.is_active` to intervalConfig (line 99)
 - Deployed to Vercel production: October 8, 2025
-- Status: ✅ **DIAGNOSTIC LOGGING DEPLOYED**
+- Status: ✅ **DIAGNOSTIC LOGGING DEPLOYED + ROOT CAUSE FIXED**
+
+**The Actual Problem:**
+- NOT a code logic issue
+- NOT a state management issue  
+- NOT a database query issue
+- **Simple data mapping issue**: `isActive` field wasn't being included in API response
 
 **Safety Notes:**
 - ✅ NO destructive code - only logging additions

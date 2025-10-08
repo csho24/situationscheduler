@@ -383,8 +383,12 @@ async function getAccessToken(): Promise<string> {
 - **Build failed**: Supabase client initialization at module load time
 - Fixed: `a565537` - "Fix: Lazy Supabase client initialization to fix build error"
 - Changed: `const supabase = createClient()` → `function getSupabaseClient()` (lazy initialization)
+- **Issue**: Used wrong env var names (`NEXT_PUBLIC_*` instead of correct names)
+- **Result**: Token caching didn't work, showed warning, fell back to fetching fresh every time
+- Final fix: `aa103d7` - "Fix: Use centralized Supabase client for token caching"
+- Changed: Use `import { supabase } from '@/lib/supabase'` (same as all other routes)
 - Deployed to Vercel production: October 8, 2025
-- Status: ✅ **IMPLEMENTED AND DEPLOYED**
+- Status: ✅ **IMPLEMENTED AND WORKING**
 
 **Safety Notes:**
 - ✅ NO destructive code - only additions
