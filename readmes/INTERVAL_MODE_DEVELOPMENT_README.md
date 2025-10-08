@@ -1274,14 +1274,75 @@ try {
 - Issue: `/api/schedules` was not including `isActive` in `intervalConfig` object
 - Cron was checking `intervalData.isActive` but getting `undefined`
 - Fix: Added `isActive: intervalData.is_active` to intervalConfig (line 99)
-- Deployed to Vercel production: October 8, 2025
-- Status: ✅ **DIAGNOSTIC LOGGING DEPLOYED + ROOT CAUSE FIXED**
+- **SUCCESS**: `aa103d7` - Token caching working, interval mode works when window closed ✅
+- **Test at 18:11**: AC turned OFF successfully after blackout window ✅
+- Status: ✅ **WORKING**
 
-**The Actual Problem:**
-- NOT a code logic issue
-- NOT a state management issue  
-- NOT a database query issue
-- **Simple data mapping issue**: `isActive` field wasn't being included in API response
+### BEEPING FIX BROKE INTERVAL MODE (October 8, 2025 - 18:25)
+
+**What Happened:**
+- At 18:11pm: Interval mode working perfectly ✅
+- At 18:25pm: Deployed beeping fix (`d4c2c62`)
+- At 18:28pm: AC failed to turn OFF ❌
+- **My beeping fix broke the working interval mode**
+
+**Mistakes Made in Beeping Fix:**
+
+**Mistake 1: Undefined Handling Bug**
+- Code checked: `if (lastState !== shouldBeOn)` where `lastState = lastIntervalState === 'true'`
+- When no saved state exists: `lastIntervalState = undefined`
+- `undefined === 'true'` = `false`
+- So `lastState = false` (thought AC was OFF)
+- When AC should turn OFF: `false !== false` = no change = didn't send command ❌
+
+**Mistake 2: Wrong Field Names (snake_case vs camelCase)**
+- Sent: `setting_key` and `setting_value` (snake_case)
+- API expects: `settingKey` and `settingValue` (camelCase)
+- Result: Saved "undefined: undefined" in database
+- Log showed: `⚙️ SERVER: Updating user setting - undefined: undefined`
+
+**Impact:**
+- AC commands not sent when they should be
+- State not saved properly to database
+- Interval mode broken when window closed
+- **Same working feature broken by trying to fix beeping**
+
+### FIXES FOR THE BROKEN FIX (October 8, 2025)
+
+**Fix 1: Handle Undefined/First Run**
+```typescript
+// If no saved state, always send command (first run)
+// Otherwise, only send if state changed
+const shouldSendCommand = !lastIntervalState || (lastIntervalState === 'true') !== shouldBeOn;
+
+if (shouldSendCommand) {
+  const lastState = lastIntervalState === 'true';
+  console.log(`🔄 CRON: State changed (${lastIntervalState ? (lastState ? 'ON' : 'OFF') : 'UNKNOWN'} → ${shouldBeOn ? 'ON' : 'OFF'}), sending command`);
+  // Send command
+}
+```
+
+**Fix 2: Correct Field Names**
+```typescript
+await fetch(`${baseUrl}/api/schedules`, {
+  method: 'POST',
+  body: JSON.stringify({
+    type: 'user_settings',
+    settingKey: 'interval_mode_last_state',  // camelCase!
+    settingValue: shouldBeOn.toString()       // camelCase!
+  })
+});
+```
+
+**What These Fixes Do:**
+1. ✅ Always send command on first run (no saved state = send)
+2. ✅ Only skip if state explicitly matches previous state
+3. ✅ Use correct camelCase field names
+4. ✅ State properly saved to database
+
+**Deployment:**
+- Committed: (pending) - "Fix: Handle undefined state + correct field names for beeping fix"
+- Status: ⏳ **READY TO DEPLOY**
 
 **Safety Notes:**
 - ✅ NO destructive code - only logging additions

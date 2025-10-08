@@ -253,11 +253,14 @@ export async function GET() {
         const lastStateResponse = await fetch(`${baseUrl}/api/schedules`);
         const lastStateData = await lastStateResponse.json();
         const lastIntervalState = lastStateData?.userSettings?.interval_mode_last_state;
-        const lastState = lastIntervalState === 'true'; // was AC on last time we checked?
         
-        // Only send command if state changed
-        if (lastState !== shouldBeOn) {
-          console.log(`🔄 CRON: State changed (${lastState ? 'ON' : 'OFF'} → ${shouldBeOn ? 'ON' : 'OFF'}), sending command`);
+        // If no saved state, always send command (first run)
+        // Otherwise, only send if state changed
+        const shouldSendCommand = !lastIntervalState || (lastIntervalState === 'true') !== shouldBeOn;
+        
+        if (shouldSendCommand) {
+          const lastState = lastIntervalState === 'true';
+          console.log(`🔄 CRON: State changed (${lastIntervalState ? (lastState ? 'ON' : 'OFF') : 'UNKNOWN'} → ${shouldBeOn ? 'ON' : 'OFF'}), sending command`);
           
           const commandResponse = await fetch(`${baseUrl}/api/tuya`, {
             method: 'POST',
@@ -279,8 +282,8 @@ export async function GET() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 type: 'user_settings',
-                setting_key: 'interval_mode_last_state',
-                setting_value: shouldBeOn.toString()
+                settingKey: 'interval_mode_last_state',  // camelCase, not snake_case!
+                settingValue: shouldBeOn.toString()
               })
             });
             

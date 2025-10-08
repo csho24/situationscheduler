@@ -126,6 +126,59 @@ Note on interval mode storage:
 - **AC updates**: Immediate updates when interval mode changes
 - **All devices**: Sync correctly without requiring page refresh
 
+### Scheduling Behavior: Event-Based vs State-Based (October 8, 2025)
+
+**CRITICAL DISTINCTION**: The system uses TWO different approaches for different features:
+
+**1. Regular Schedules (Lights, Laptop, USB Hub) - EVENT-BASED:**
+- **How it works**: "Execute this action at this exact time"
+- **Example**: "Turn lights OFF at 20:10"
+- **Behavior**: If cron hits at 20:10, executes. If cron misses 20:10 (blackout), event is lost forever.
+- **Manual override**: Respected! Manual control creates override that pauses automation for 60 minutes.
+- **Does NOT "go back"**: If you manually turn lights ON, system won't "correct" it back to scheduled state.
+- **Philosophy**: One-time events that happen or don't happen. Respects user manual control.
+
+**2. Interval Mode (AC only) - STATE-BASED:**
+- **How it works**: "Calculate what device SHOULD be right now based on cycle"
+- **Example**: "Started at 18:00, 6 min ON / 10 min OFF, now it's 18:11 → AC should be OFF"
+- **Behavior**: Every minute, calculates correct state. If wrong, corrects it. Auto-recovers from missed minutes.
+- **Manual override**: NOT available during interval mode. Interval mode takes full control.
+- **DOES "go back"**: If AC is OFF but should be ON, next cron will turn it ON (auto-corrects).
+- **Philosophy**: Continuous state that must be maintained. No manual intervention during interval.
+
+**Why the Difference:**
+- **Regular schedules**: User needs manual control flexibility (turn lights on anytime, system respects it)
+- **Interval mode**: Automated cycling system (like a thermostat), user opts into full automation
+
+**Cron Blackout Impact:**
+- **Regular schedules**: Event at 20:08 missed = lights stay in wrong state forever
+- **Interval mode**: Missed at 18:06 = auto-corrects at 18:11 when blackout ends
+
+**Example Scenarios:**
+
+*Scenario A - Regular Schedule (Event-Based):*
+1. Schedule: Lights OFF at 20:08
+2. User manually turns lights ON at 19:00
+3. Manual override active until 20:00 (60 min)
+4. At 20:08: Cron executes "lights OFF" (override expired)
+5. Result: Lights turn OFF ✅ (respects schedule after override expires)
+
+*Scenario B - Interval Mode (State-Based):*
+1. Interval mode: 6 min ON / 10 min OFF, started 18:00
+2. At 18:06: Should turn OFF (blackout window - missed)
+3. At 18:11: Cron calculates "should be OFF", sends OFF command
+4. At 18:16: AC turns ON (next cycle)
+5. Result: Auto-corrects after blackout ✅ (maintains cycle)
+
+*Scenario C - Manual Override During Regular Schedule:*
+1. Schedule: Lights OFF at 20:00
+2. User manually turns lights ON at 20:30
+3. Next schedule: Lights OFF at 22:00
+4. At 22:00: Lights turn OFF (next scheduled event)
+5. Result: Manual control respected until next event ✅
+
+**Key Takeaway**: Regular schedules respect your manual control and execute one-time events. Interval mode maintains a continuous automated state and auto-corrects any deviations.
+
 ### Recent Major Changes (Sep 27-30, 2025)
 - **Data Loss Fix**: Removed destructive code that was deleting schedules on every edit
 - **Supabase Sync Fixes**: Fixed cron job reading from old files instead of Supabase
