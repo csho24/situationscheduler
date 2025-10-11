@@ -233,6 +233,25 @@ export async function GET() {
         console.log(`🔄 CRON: Checking interval mode for aircon - ACTIVE with startTime`);
         
         const baseUrl = process.env.NODE_ENV === 'production' ? 'https://situationscheduler.vercel.app' : 'http://localhost:3001';
+        
+        // Check if Web Worker is active (heartbeat < 2 min old)
+        const heartbeatResponse = await fetch(`${baseUrl}/api/schedules`);
+        const heartbeatData = await heartbeatResponse.json();
+        const heartbeatTimestamp = heartbeatData?.userSettings?.interval_mode_heartbeat;
+        
+        if (heartbeatTimestamp) {
+          const heartbeatAge = Date.now() - parseInt(heartbeatTimestamp);
+          if (heartbeatAge < 120000) { // Less than 2 minutes old
+            console.log(`🔄 CRON: Web Worker is active (heartbeat ${Math.floor(heartbeatAge/1000)}s ago), skipping cron control`);
+            // Web Worker is handling interval mode, cron should not interfere
+            return;
+          } else {
+            console.log(`🔄 CRON: Web Worker heartbeat stale (${Math.floor(heartbeatAge/1000)}s ago), cron taking over`);
+          }
+        } else {
+          console.log(`🔄 CRON: No Web Worker heartbeat found, cron taking over`);
+        }
+        
         const startTime = new Date(intervalData.startTime).getTime();
         const now = Date.now();
         const elapsed = Math.floor((now - startTime) / 1000);

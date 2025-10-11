@@ -287,7 +287,7 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [customSchedules, setCustomSchedules] = useState(() => serverScheduler.getCustomSchedules());
   const [isLoadingSchedules, setIsLoadingSchedules] = useState(true);
-  const [userSettings, setUserSettings] = useState<Record<string, string>>({});
+  const [userSettings, setUserSettings] = useState<Record<string, string>>({ default_day: 'none' });
   const [isEditingDefaultDay, setIsEditingDefaultDay] = useState(false);
   const [isHoveringDropdown, setIsHoveringDropdown] = useState(false);
   const [customRoutines, setCustomRoutines] = useState<string[]>([]);
@@ -463,6 +463,17 @@ export default function Home() {
         } else {
           setOffCountdown(data.countdown);
         }
+      } else if (type === 'HEARTBEAT') {
+        // Web Worker is active - save heartbeat to database
+        fetch('/api/schedules', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'user_settings',
+            settingKey: 'interval_mode_heartbeat',
+            settingValue: data.timestamp.toString()
+          })
+        }).catch(err => console.error('Failed to save heartbeat:', err));
       }
     };
     
@@ -560,6 +571,17 @@ export default function Home() {
         } else {
           setOffCountdown(data.countdown);
         }
+      } else if (type === 'HEARTBEAT') {
+        // Web Worker is active - save heartbeat to database
+        fetch('/api/schedules', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'user_settings',
+            settingKey: 'interval_mode_heartbeat',
+            settingValue: data.timestamp.toString()
+          })
+        }).catch(err => console.error('Failed to save heartbeat:', err));
       }
     };
     
@@ -1084,8 +1106,8 @@ export default function Home() {
                     disabled={!isEditingDefaultDay}
                     onChange={async (e) => {
                       const newValue = e.target.value;
-                      setUserSettings(prev => ({ ...prev, default_day: newValue }));
                       try {
+                        // Save to database FIRST
                         await fetch('/api/schedules', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
@@ -1095,6 +1117,8 @@ export default function Home() {
                             settingValue: newValue
                           })
                         });
+                        // Only update UI AFTER successful save
+                        setUserSettings(prev => ({ ...prev, default_day: newValue }));
                         setNotification(`Default days set to: ${newValue}`);
                         setTimeout(() => setNotification(null), 3000);
                         setIsEditingDefaultDay(false); // Auto-save and exit edit mode

@@ -7,6 +7,7 @@ let offCountdown = 0;
 let onDuration = 0;
 let intervalDuration = 0;
 let startTime = 0;
+let heartbeatCounter = 0; // Counter for heartbeat updates
 
 self.onmessage = function(e) {
   const { type, data } = e.data;
@@ -55,6 +56,16 @@ self.onmessage = function(e) {
     
     // Start the timer - NO 30-second sync to avoid conflicts
     intervalId = setInterval(() => {
+      heartbeatCounter++;
+      
+      // Send heartbeat every 60 seconds to signal Web Worker is active
+      if (heartbeatCounter % 60 === 0) {
+        self.postMessage({
+          type: 'HEARTBEAT',
+          data: { timestamp: Date.now() }
+        });
+      }
+      
       if (currentPeriod === 'ON') {
         onCountdown--;
         

@@ -1341,16 +1341,158 @@ await fetch(`${baseUrl}/api/schedules`, {
 4. ✅ State properly saved to database
 
 **Deployment:**
-- Committed: (pending) - "Fix: Handle undefined state + correct field names for beeping fix"
+- Committed: `32790ae` - "Fix: Handle undefined state + correct camelCase field names for beeping fix"
+- Deployed: October 8, 2025 - 18:37
+- Status: ✅ **DEPLOYED**
+
+**Result:** Interval mode works when window closed BUT beeping issue returned
+
+---
+
+## NEW PROBLEM: Excessive Beeping When Window Open (October 8-9, 2025)
+
+### The Problem
+**User Issue:** AC beeping excessively, even mid-cycle (not just at transitions)
+
+**Timeline:**
+- October 8, 18:11pm: Interval mode working perfectly ✅
+- October 8, 18:25pm: Deployed beeping fix (broke interval mode)
+- October 8, 18:37pm: Fixed the broken fix
+- October 9, 17:30pm: Interval mode works BUT excessive beeping ❌
+
+### Root Cause Analysis
+
+**From Vercel logs at 17:28-17:30:**
+- 17:28:53 - IR command sent
+- 17:29:03 - CRON sends command  
+- 17:29:08 - Another IR command
+- 17:30:12 - Another command
+
+**The Problem:** BOTH systems sending commands simultaneously:
+1. **Web Worker** (browser) - sends commands when window is OPEN
+2. **Cron** (server) - sends commands every minute regardless of window state
+
+**Result:** Double commands = double beeping (or more)
+
+**Why This Happens:**
+- Web Worker was designed for window-open precision
+- Cron backup was added for window-closed reliability
+- **BUT both run at the same time when window is open!**
+- No coordination between them = duplicate commands
+
+### The Solution: Heartbeat System (October 9, 2025)
+
+**Concept:** Web Worker signals "I'm alive" so cron knows when to back off
+
+**How It Works:**
+
+**1. Web Worker Sends Heartbeat (Every 60 Seconds):**
+- Web Worker posts message: `{ type: 'HEARTBEAT', timestamp: Date.now() }`
+- Main thread saves to database: `interval_mode_heartbeat` in `user_settings`
+- Proves Web Worker is alive and handling interval mode
+
+**2. Cron Checks Heartbeat Before Acting:**
+- Reads `interval_mode_heartbeat` from database
+- Calculates age: `Date.now() - heartbeat timestamp`
+- If < 2 minutes old: **SKIP** - Web Worker is alive, let it handle interval mode
+- If > 2 minutes old: **TAKE OVER** - Web Worker dead, cron handles it
+- If no heartbeat: **TAKE OVER** - Web Worker never started, cron handles it
+
+**Code Changes:**
+
+**File 1: `/public/interval-worker.js`**
+```javascript
+// Added heartbeat counter
+let heartbeatCounter = 0;
+
+// In timer loop (every second):
+heartbeatCounter++;
+
+// Send heartbeat every 60 seconds
+if (heartbeatCounter % 60 === 0) {
+  self.postMessage({
+    type: 'HEARTBEAT',
+    data: { timestamp: Date.now() }
+  });
+}
+```
+
+**File 2: `/src/app/page.tsx` (both start and resume functions)**
+```typescript
+// Handle heartbeat messages from Web Worker
+else if (type === 'HEARTBEAT') {
+  // Save heartbeat to database
+  fetch('/api/schedules', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'user_settings',
+      settingKey: 'interval_mode_heartbeat',
+      settingValue: data.timestamp.toString()
+    })
+  }).catch(err => console.error('Failed to save heartbeat:', err));
+}
+```
+
+**File 3: `/src/app/api/cron/route.ts`**
+```typescript
+// Before doing any interval mode logic, check heartbeat
+const heartbeatResponse = await fetch(`${baseUrl}/api/schedules`);
+const heartbeatData = await heartbeatResponse.json();
+const heartbeatTimestamp = heartbeatData?.userSettings?.interval_mode_heartbeat;
+
+if (heartbeatTimestamp) {
+  const heartbeatAge = Date.now() - parseInt(heartbeatTimestamp);
+  if (heartbeatAge < 120000) { // Less than 2 minutes
+    console.log(`🔄 CRON: Web Worker is active (heartbeat ${Math.floor(heartbeatAge/1000)}s ago), skipping cron control`);
+    return; // Skip - Web Worker is handling it
+  } else {
+    console.log(`🔄 CRON: Web Worker heartbeat stale (${Math.floor(heartbeatAge/1000)}s ago), cron taking over`);
+  }
+} else {
+  console.log(`🔄 CRON: No Web Worker heartbeat found, cron taking over`);
+}
+
+// Continue with cron interval mode logic...
+```
+
+### Expected Behavior
+
+**Scenario A: Window Open**
+- Web Worker running → sends heartbeat every 60s
+- Heartbeat age = 0-60s (fresh)
+- Cron checks heartbeat → sees it's fresh → skips
+- Result: Web Worker ONLY (no cron interference) ✅
+
+**Scenario B: Window Closed**
+- Web Worker dies → no more heartbeats
+- Heartbeat age = 2+ minutes (stale)
+- Cron checks heartbeat → sees it's stale → takes over
+- Result: Cron ONLY (reliable backup) ✅
+
+**Scenario C: Just After Window Closes**
+- Web Worker just died → last heartbeat 1 minute ago
+- Heartbeat age = 60-120s (transition period)
+- Cron waits until 2 min threshold
+- Result: Smooth handoff from Web Worker to Cron ✅
+
+### Benefits
+- ✅ No double commands when window open
+- ✅ No excessive beeping
+- ✅ Reliable backup when window closed
+- ✅ Smooth coordination between Web Worker and Cron
+- ✅ Simple database-based signaling (no complex infrastructure)
+
+**Deployment:**
+- Committed: (pending) - "Fix: Add heartbeat system to prevent Web Worker + Cron conflicts"
+- Files changed: `interval-worker.js`, `page.tsx`, `cron/route.ts`
 - Status: ⏳ **READY TO DEPLOY**
 
 **Safety Notes:**
-- ✅ NO destructive code - only logging additions
-- ✅ NO existing interval mode logic modified
-- ✅ NO existing schedule checking modified
-- ✅ NO data deletion operations
-- ✅ Only added console.log statements for diagnostics
-- ✅ All existing cron functionality preserved
+- ✅ NO destructive code
+- ✅ NO existing functionality removed
+- ✅ Only adds coordination between existing systems
+- ✅ Graceful handling of missing heartbeat (cron takes over)
 
 **Code Changes:**
 1. **Added** diagnostic logging to show interval mode data
