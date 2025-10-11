@@ -239,12 +239,13 @@ export async function GET() {
         const heartbeatData = await heartbeatResponse.json();
         const heartbeatTimestamp = heartbeatData?.userSettings?.interval_mode_heartbeat;
         
+        // Check if Web Worker is active - if so, skip interval mode control
+        let shouldSkipIntervalMode = false;
         if (heartbeatTimestamp) {
           const heartbeatAge = Date.now() - parseInt(heartbeatTimestamp);
           if (heartbeatAge < 120000) { // Less than 2 minutes old
-            console.log(`🔄 CRON: Web Worker is active (heartbeat ${Math.floor(heartbeatAge/1000)}s ago), skipping cron control`);
-            // Web Worker is handling interval mode, cron should not interfere
-            return;
+            console.log(`🔄 CRON: Web Worker is active (heartbeat ${Math.floor(heartbeatAge/1000)}s ago), skipping interval mode control`);
+            shouldSkipIntervalMode = true;
           } else {
             console.log(`🔄 CRON: Web Worker heartbeat stale (${Math.floor(heartbeatAge/1000)}s ago), cron taking over`);
           }
@@ -252,7 +253,9 @@ export async function GET() {
           console.log(`🔄 CRON: No Web Worker heartbeat found, cron taking over`);
         }
         
-        const startTime = new Date(intervalData.startTime).getTime();
+        // Only execute interval mode logic if Web Worker is not active
+        if (!shouldSkipIntervalMode) {
+          const startTime = new Date(intervalData.startTime).getTime();
         const now = Date.now();
         const elapsed = Math.floor((now - startTime) / 1000);
         const totalCycleTime = (intervalData.onDuration + intervalData.intervalDuration) * 60;
@@ -318,6 +321,7 @@ export async function GET() {
         } else {
           console.log(`🔄 CRON: AC already in correct state (${shouldBeOn ? 'ON' : 'OFF'}), no command needed`);
         }
+        } // End of if (!shouldSkipIntervalMode)
       }
     } catch (error) {
       console.error('❌ CRON: Interval mode check failed:', error);
