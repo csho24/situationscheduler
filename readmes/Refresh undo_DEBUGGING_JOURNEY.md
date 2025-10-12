@@ -623,3 +623,249 @@ useEffect(() => {
 5. Look for timer cleanup issues in React DevTools
 6. Test if API calls are being made but just very slow
 7. Consider removing `intervalMode` from dependencies if causing issues
+
+---
+
+## DEFAULT DAY UI DELAY ISSUE (October 11, 2025)
+
+### The Problem
+**User Issue**: Default day dropdown shows old value first on phone refresh, then takes 2-6 seconds to update to actual database value
+- **Desktop → Phone sync**: Phone refresh shows old value first, then updates after delay
+- **Phone → Desktop sync**: Desktop refresh shows correct value immediately (no issue)
+- Both devices on same WiFi, so not a network speed difference
+
+**Specific behavior:**
+- Change default_day on desktop from "none" to "rest"
+- Refresh phone → shows "none" (old) → waits 2-6 seconds → changes to "rest" (correct)
+- Desktop always shows correct value immediately on refresh
+
+**Historical Context**: This issue has caused devices to not turn on/off in the past because:
+- User changed default_day on phone thinking it saved
+- UI showed new value but database had old value
+- Cron executed schedules based on wrong default_day
+- Devices turned on/off unexpectedly
+
+### The Discovery (October 11, 2025)
+
+**From logs at 21:36-21:38:**
+- 21:36:43 - Phone successfully saved `default_day: none` to database ✅
+- 21:38:44 - Desktop successfully saved `default_day: rest` to database ✅
+- Both saves work correctly
+
+**The display delay pattern:**
+- **Phone**: Shows old value → waits 2-6 seconds → updates to correct value
+- **Desktop**: Shows correct value immediately (no delay visible)
+
+### Root Cause Analysis
+
+**Why phone shows old value first, then updates:**
+
+**Initial assumption (wrong):** Network speed difference
+- Reality: Both on same WiFi, network not the issue
+
+**Second theory:** Phone's slower CPU/JavaScript execution
+- Phone CPU slower → React lifecycle + API call take longer
+- First paint happens before data arrives → shows fallback value
+- Then API loads → updates to correct value
+
+**Direction-specific behavior:**
+- **Phone → Desktop refresh**: NO ISSUE - desktop shows correct value immediately ✅
+- **Desktop → Phone refresh**: ISSUE - phone shows old value, then updates after delay ❌
+
+**Actual root cause:** Hardcoded fallback value + async data loading
+
+**The problematic pattern:**
+```typescript
+// Line 290: State starts empty
+const [userSettings, setUserSettings] = useState<Record<string, string>>({});
+
+// Line 1105: Dropdown uses fallback
+<select value={userSettings?.default_day || 'rest'}>
+```
+
+**What happens:**
+1. Page loads → `userSettings = {}`
+2. Dropdown renders with fallback: `undefined || 'rest'` = **'rest'** displayed
+3. API call starts (async)
+4. **Desktop (fast)**: API returns in <1 second → updates to "none" before user notices
+5. **Phone (slower)**: API returns in 2-6 seconds → user SEES "rest" before it switches
+6. Result: Flickering visible on phone, not on desktop
+
+**Why desktop doesn't flicker:**
+- Not because of faster network
+- Not because of better code
+- Simply because the API call completes before the first visual paint
+- Phone's slower processing means first paint happens while API is still loading
+
+### Previous Attempt at Fixing (October 11, 2025)
+
+**Wrong fix #1: Hardcode to 'none'**
+```typescript
+const [userSettings, setUserSettings] = useState<Record<string, string>>({ default_day: 'none' });
+```
+- **Problem**: What if database actually has 'rest'? Then it flickers from 'none' to 'rest'
+- **Result**: Just reversed the flicker direction
+
+**Wrong fix #2: Disable until loaded**
+```typescript
+<select disabled={isLoadingSchedules}>
+```
+- **Problem**: Doesn't stop the flickering, just makes it unclickable during flicker
+- **Result**: Plaster, not a fix
+
+### Fixes Attempted (October 11, 2025)
+
+**Fix #1: Save to database FIRST, then update UI** (Lines 1109-1121)
+```typescript
+// OLD: Update UI immediately, then save
+setUserSettings(prev => ({ ...prev, default_day: newValue }));
+await fetch('/api/schedules', { /* save */ });
+
+// NEW: Save first, then update UI
+await fetch('/api/schedules', { /* save */ });
+setUserSettings(prev => ({ ...prev, default_day: newValue })); // After save succeeds
+```
+
+**Result:**
+- ✅ Prevents race condition on dropdown changes
+- ✅ UI only updates after successful database save
+- ❌ Doesn't fix initial page load delay (phone still shows old value first, then updates)
+
+**Fix #2: Initialize state with 'none' instead of empty** (Line 290)
+```typescript
+// OLD: Empty object
+const [userSettings, setUserSettings] = useState<Record<string, string>>({});
+
+// NEW: Start with 'none' (uncommitted)
+const [userSettings, setUserSettings] = useState<Record<string, string>>({ default_day: 'none' });
+```
+
+**Result:**
+- ❌ Just reverses the delay issue (now shows 'none' first → updates to 'rest' if DB has 'rest')
+- ❌ Not deployed - recognized as wrong approach
+
+**Deployment Status (October 11, 2025):**
+- Committed: `c935c48` - "URGENT: Fix cron 500 error - missing Response return in heartbeat check"
+- Includes: Fix #1 only (save first, then update UI)
+- Does NOT include: Fix #2 (hardcoded 'none' value)
+- Status: ✅ **PARTIAL FIX DEPLOYED**
+
+### Current State (After Fix #1)
+
+**What works:**
+- ✅ Dropdown changes save correctly before updating UI
+- ✅ No race condition when user clicks dropdown
+- ✅ Database always has correct value
+
+**What's still broken:**
+- ❌ Initial page load delay on phone (shows old value first, then updates to actual value after 2-6 seconds)
+- ❌ Desktop has no delay (shows correct value immediately)
+- ❌ Inconsistent UX between devices (desktop fast, phone slow)
+
+### Current Plaster Fix (Uncommitted)
+
+**Fix #3: Hide value until loaded** (Lines 1105-1106)
+```typescript
+<select 
+  value={isLoadingSchedules ? '' : (userSettings?.default_day || 'rest')}
+  disabled={!isEditingDefaultDay || isLoadingSchedules}
+>
+```
+
+**What it does:**
+- Shows empty dropdown while data is loading
+- Once loaded, shows correct value
+- No wrong value displayed (just blank temporarily)
+
+**Result:**
+- ✅ Phone won't show wrong value anymore
+- ✅ No delayed update visible
+- ⚠️ Empty dropdown for 2-6 seconds on phone (might look broken)
+- ⚠️ Plaster fix, not proper solution
+
+**Why this isn't ideal:**
+1. **Poor UX**: Blank dropdown looks broken or unfinished to users
+2. **Inconsistent behavior**: Desktop shows value immediately, phone shows blank then fills in
+3. **Doesn't solve root cause**: Still loading data client-side, just hiding the problem
+4. **Disabled during load**: User can't even see the value while it's loading
+5. **Band-aid approach**: Masks the symptom instead of fixing async data loading architecture
+6. **Could cause confusion**: User might think app is frozen or data is missing
+
+**Why we need it anyway:**
+- Showing WRONG value is worse than showing NO value
+- Prevents user from seeing incorrect state
+- Quick fix while proper solution (SSR) is planned
+
+**Status**: Code ready, uncommitted, awaiting user approval to deploy plaster
+
+### Proper Solution (For Future)
+
+**Server-Side Rendering:**
+- Load data on server BEFORE sending HTML to browser
+- Browser receives page with correct value already in it
+- No API call needed, no delay, no workarounds
+
+**Why not implemented:**
+- Requires major refactor (page is currently client-side component)
+- Need to restructure state management
+- More complex, needs careful planning
+
+**Recommendation**: Use plaster fix for now, implement proper SSR later when time permits
+
+### Why This Matters
+
+**This isn't just a cosmetic issue:**
+- User changes default_day on phone
+- UI updates immediately (optimistic update)
+- If page refreshes before save completes → shows wrong value
+- Cron might execute with wrong default_day
+- Devices turn on/off when they shouldn't
+
+**Historical impact:**
+- Devices unexpectedly turned on/off
+- User couldn't trust phone UI
+- Had to use desktop for critical settings changes
+
+### Possible Problems with Current State
+
+**Problem 1: User confusion from delayed updates**
+- Phone users see old value first for 2-6 seconds on every page refresh
+- Only happens when desktop changes the value (desktop → phone direction)
+- Phone → desktop direction works fine (no delay)
+- Might think setting changed when it didn't
+- Might change setting back thinking it's wrong
+- Creates uncertainty about actual system state
+
+**Problem 2: Race condition still possible (different scenario)**
+- User changes setting on phone → save starts
+- Before save completes, user refreshes page
+- Page loads with old value from database
+- User sees old value, thinks change didn't work
+- Makes change again → duplicate saves, confusion
+
+**Problem 3: Multi-device sync confusion**
+- User on phone sees "rest" (flickering)
+- User on desktop sees "none" (correct, loaded faster)
+- Same database, different UI states
+- User doesn't know which is real
+
+**Problem 4: Could cause schedule execution errors**
+- If flicker happens during critical time (just before scheduled event)
+- User might think default_day is "rest" (seeing flickering value)
+- Actually it's "none" in database
+- Or vice versa
+- Schedules run/don't run unexpectedly
+
+**Risk Level**: Medium
+- Saves work correctly (low risk of data loss)
+- But UI confusion could lead to user errors
+- Historical precedent of causing unexpected device behavior
+
+**Current status (October 11, 2025):**
+- Database saves work correctly on both devices ✅
+- Desktop UI shows correct value immediately on refresh ✅
+- Phone → Desktop refresh: works fine ✅
+- Desktop → Phone refresh: shows old value first, then updates after 2-6 second delay ❌
+- Fix pending user approval of approach
+
+---
