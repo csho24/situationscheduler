@@ -287,7 +287,7 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [customSchedules, setCustomSchedules] = useState(() => serverScheduler.getCustomSchedules());
   const [isLoadingSchedules, setIsLoadingSchedules] = useState(true);
-  const [userSettings, setUserSettings] = useState<Record<string, string> | null>(null); // null = not loaded yet
+  const [userSettings, setUserSettings] = useState<Record<string, string>>({});
   const [isEditingDefaultDay, setIsEditingDefaultDay] = useState(false);
   const [isHoveringDropdown, setIsHoveringDropdown] = useState(false);
   const [customRoutines, setCustomRoutines] = useState<string[]>([]);
@@ -1103,7 +1103,7 @@ export default function Home() {
                 >
                   <select 
                     value={userSettings?.default_day || 'rest'} 
-                    disabled={!isEditingDefaultDay || userSettings === null}
+                    disabled={!isEditingDefaultDay}
                     onChange={async (e) => {
                       const newValue = e.target.value;
                       try {

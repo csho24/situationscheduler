@@ -623,3 +623,93 @@ useEffect(() => {
 5. Look for timer cleanup issues in React DevTools
 6. Test if API calls are being made but just very slow
 7. Consider removing `intervalMode` from dependencies if causing issues
+
+---
+
+## DEFAULT DAY UI DELAY ISSUE (October 11, 2025)
+
+### The Problem
+**Symptom**: Phone shows old default_day value on refresh, takes 2-6 seconds to update to correct value from database
+- **Desktop → Phone**: Shows old value first, then updates (delay) ❌
+- **Phone → Desktop**: Shows correct value immediately ✅
+
+**Why it matters**: User might change setting on phone, refresh before save completes, see old value, think it didn't work, causing incorrect schedule execution
+
+**Log evidence (21:36-21:38):** Both phone and desktop saves work correctly, but UI shows old value during data load on phone only
+
+### Root Cause
+Hardcoded fallback value + async data loading on client-side:
+
+```typescript
+const [userSettings, setUserSettings] = useState<Record<string, string>>({});
+<select value={userSettings?.default_day || 'rest'}> // Shows 'rest' while loading
+```
+Phone slower processing → first paint happens before API loads → shows fallback → then updates. Desktop faster → API loads before paint → no visible delay.
+
+### Fixes Applied (October 11, 2025)
+
+**Deployed (Commit c935c48):**
+- Save to DB first, then update UI (prevents race condition on dropdown changes)
+- Result: Dropdown changes work ✅, page load delay remains ❌
+
+**Attempted but not deployed:**
+- Hardcoding initial state to 'none' - just reverses the problem
+
+### Plaster Fix (Uncommitted)
+Hide value until loaded: `value={isLoadingSchedules ? '' : value}`
+- ✅ No wrong value shown
+- ❌ Blank for 2-6 sec on phone (poor UX)
+- ⚠️ Band-aid, not proper fix
+
+### Proper Fix Needed
+Server-side rendering - load data on server before sending HTML. Requires refactor from client component.
+
+### Status & Risks
+- Saves work correctly ✅
+- Desktop shows values immediately ✅  
+- Phone shows old value first (2-6 sec delay) ❌
+- Risk: User confusion could cause incorrect default_day changes → unexpected device behavior
+- Plaster fix ready (hide until loaded), proper fix needs SSR refactor
+
+---
+
+## UPDATE: Plaster Fix Rejected (October 12, 2025)
+
+### What Happened
+**Commit 8ea8583 deployed:** "Plaster fix: Hide default_day dropdown value until data loaded"
+- Changed dropdown to show empty value while loading: `value={isLoadingSchedules ? '' : value}`
+- Expected: Blank dropdown for 2-6 seconds, then shows correct value
+- **Actual result**: Shows "work" (first option selected when value=''), then switches
+
+**User feedback:** Showing "work" randomly is worse than showing old value
+
+**Action taken:** Reverted the plaster fix (October 12, 2025)
+- Removed empty value logic
+- Back to original: `value={userSettings?.default_day || 'rest'}`
+- Phone delay issue remains but won't confuse with random "work" value
+
+### Current State (October 12, 2025)
+
+**What's deployed and working:**
+- ✅ Token caching in Supabase (Oct 8) - prevents "token invalid" errors
+- ✅ Interval mode works when window closed (Oct 8) - isActive field fix
+- ✅ Heartbeat system (Oct 11) - reduces AC beeping when window open
+- ✅ Save to DB first (Oct 11) - prevents race condition on dropdown changes
+- ✅ Cron 500 error fixed (Oct 11) - heartbeat check returns proper Response
+
+**What's still broken:**
+- ❌ Phone shows stale default_day value on refresh (takes 2-6 seconds to update)
+- ❌ Only affects Desktop → Phone direction (Phone → Desktop is fine)
+- ❌ Root cause unknown (not fallback value, not network - possibly browser/React caching)
+
+**What was attempted but rejected:**
+- ❌ Hide value until loaded - showed "work" instead of blank
+- ❌ Hardcode to 'none' - just reverses the problem
+- ❌ SSR refactor - too risky for tonight
+
+**Next steps:**
+- Investigate where phone is getting stale value from (browser cache? React? service worker?)
+- Consider proper SSR implementation when time permits
+- Document as known phone limitation for now
+
+---
