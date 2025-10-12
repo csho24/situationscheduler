@@ -1547,7 +1547,7 @@ if (heartbeatTimestamp) {
 ### The Problem (October 11, 2025 - 9:24-9:50pm)
 **Symptom**: Cron endpoint returning 500 Internal Server Error every minute
 
-**Discovery**: User noticed excessive beeping and checked Vercel logs showing repeated 500 errors.
+**Discovery**: Repeated 500 errors detected in deployment logs.
 
 **Root Cause**: 
 In `/api/cron/route.ts`, the heartbeat check had an early return that returned `undefined` instead of a proper `Response` object:

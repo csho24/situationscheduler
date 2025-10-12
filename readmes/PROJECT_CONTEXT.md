@@ -275,6 +275,28 @@ Note on interval mode storage:
 - Implement execution logging for debugging
 - Create monitoring dashboard for cron health
 
+### Documentation Structure
+
+**Project Readmes** (in `/readmes/` directory):
+
+1. **`PROJECT_CONTEXT.md`** - This file; project overview, setup, and critical patterns
+2. **`Refresh undo_DEBUGGING_JOURNEY.md`** - Primary debugging log for UI issues, default_day problems, and general troubleshooting
+3. **`AC_INTERVAL_MODE_DEVELOPMENT_README.md`** - Complete development history of AC interval mode feature, beeping fixes, and heartbeat system
+4. **`LIGHTS_DONT_OFF_20-10.md`** - Incidents and debugging for lights scheduling failures, token issues, and cron problems
+5. **`IR_AC_INTEGRATION_README.md`** - Technical documentation for Tuya IR AC integration, API endpoints, and commands
+6. **`SERVER_SIDE_SCHEDULER_README.md`** - Server-side scheduling implementation and migration notes
+7. **`TOKEN_ISSUES_DEBUG.md`** - Tuya API token management, caching solutions, and authentication debugging
+8. **`MIGRATION to server side_NOTES.md`** - Migration from client-side to server-side scheduling implementation
+9. **`HYDRATION_DEBUG.md`** - Next.js hydration mismatch debugging and SSR issues
+10. **`DELETED_DEVICE_SCHEDULES_INVESTIGATION.md`** - Investigation into disappearing device schedules bug
+
+**Documentation Guidelines:**
+- Each readme focuses on specific feature/issue area
+- Include dates for all entries (YYYY-MM-DD format)
+- Document problems, discoveries, fixes, and lessons learned
+- Update relevant readme when making changes to related code
+- Cross-reference between readmes when issues are related
+
 ### Deployment Notes
 **CRITICAL**: Do NOT add `vercel.json` with cron configurations - deployment will fail.
 
