@@ -69,6 +69,9 @@ export default function Calendar({ onDateSelect, customRoutines = [] }: Calendar
     if (selectedDate) {
       const dateString = format(selectedDate, 'yyyy-MM-dd');
       
+      // Save original state for rollback
+      const originalSchedules = [...schedules];
+      
       // Update local state immediately for responsive UI
       let updatedSchedules;
       const existingIndex = schedules.findIndex(s => s.date === dateString);
@@ -84,27 +87,33 @@ export default function Calendar({ onDateSelect, customRoutines = [] }: Calendar
       
       setSchedules(updatedSchedules);
       
-      // Then sync to server
-      await serverScheduler.setSituation(dateString, situation);
-      
-      // Reload schedules from server to confirm the update
+      // Try to sync to server (with retry logic)
       try {
-        const response = await fetch('/api/schedules');
-        const data = await response.json();
-        if (data.success && data.calendarAssignments) {
-          setSchedules(data.calendarAssignments);
-          console.log('📅 Calendar: Reloaded from server after update');
-        } else {
-          console.warn('📅 Calendar: Failed to reload from server, keeping local state');
+        await serverScheduler.setSituation(dateString, situation);
+        
+        // Success! Reload from server to confirm
+        try {
+          const response = await fetch('/api/schedules');
+          const data = await response.json();
+          if (data.success && data.calendarAssignments) {
+            setSchedules(data.calendarAssignments);
+            console.log('📅 Calendar: Reloaded from server after update');
+          }
+        } catch (reloadError) {
+          console.error('📅 Calendar: Error reloading from server:', reloadError);
         }
-      } catch (error) {
-        console.error('📅 Calendar: Error reloading from server:', error);
+        
+        onDateSelect?.(selectedDate, situation);
+        setShowSituationModal(false);
+        setSelectedDevice(DEVICES[0]); // Reset to default
+        setSelectedDate(null);
+        
+      } catch (saveError) {
+        // All retries failed - revert UI to original state
+        console.error('❌ Calendar save failed, reverting UI:', saveError);
+        setSchedules(originalSchedules);
+        alert('Failed to save calendar assignment. Please check your internet connection and try again.');
       }
-      
-      onDateSelect?.(selectedDate, situation);
-      setShowSituationModal(false);
-      setSelectedDevice(DEVICES[0]); // Reset to default
-      setSelectedDate(null);
     }
   };
 

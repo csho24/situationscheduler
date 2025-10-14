@@ -110,38 +110,64 @@ export class ServerScheduler {
     
     // No localStorage - use Supabase only
 
-    // Sync to server
-    try {
-      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-      const requestBody = {
-        type: 'calendar',
-        date,
-        situation
-      };
-      
-      console.log(`📅 Sending calendar update to server:`, requestBody);
-      console.log(`📅 Request URL: ${baseUrl}/api/schedules`);
-      
-      const response = await fetch(`${baseUrl}/api/schedules`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
-      });
-      
-      console.log(`📅 Server response status: ${response.status}`);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`📅 Server error response:`, errorText);
-        throw new Error(`Server responded with ${response.status}: ${errorText}`);
+    // Sync to server with retry logic
+    const MAX_RETRIES = 3;
+    const TIMEOUT_MS = 10000; // 10 second timeout
+    
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+        const requestBody = {
+          type: 'calendar',
+          date,
+          situation
+        };
+        
+        console.log(`📅 [Attempt ${attempt}/${MAX_RETRIES}] Sending calendar update to server:`, requestBody);
+        
+        // Create abort controller for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+        
+        const response = await fetch(`${baseUrl}/api/schedules`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        console.log(`📅 Server response status: ${response.status}`);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`📅 Server error response:`, errorText);
+          throw new Error(`Server responded with ${response.status}: ${errorText}`);
+        }
+        
+        const responseData = await response.json();
+        console.log(`📅 Server response data:`, responseData);
+        console.log(`✅ Successfully synced calendar update: ${date} -> ${situation}`);
+        
+        // Success! Exit retry loop
+        return;
+        
+      } catch (error) {
+        console.error(`❌ [Attempt ${attempt}/${MAX_RETRIES}] Failed to sync calendar:`, error);
+        
+        if (attempt === MAX_RETRIES) {
+          // Final attempt failed - revert local state
+          this.schedules.delete(date);
+          console.error('❌ ALL RETRY ATTEMPTS FAILED - Calendar NOT saved to database');
+          throw new Error('Failed to save calendar assignment after multiple attempts. Please check your connection and try again.');
+        }
+        
+        // Wait before retry (exponential backoff: 1s, 2s, 4s)
+        const waitMs = Math.pow(2, attempt - 1) * 1000;
+        console.log(`⏳ Waiting ${waitMs}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, waitMs));
       }
-      
-      const responseData = await response.json();
-      console.log(`📅 Server response data:`, responseData);
-      console.log(`📅 Synced calendar update to server: ${date} -> ${situation}`);
-    } catch (error) {
-      console.error('❌ Failed to sync calendar to server:', error);
-      // Don't revert local state - keep the optimistic update
     }
   }
 
