@@ -139,20 +139,6 @@ export async function POST(request: NextRequest) {
       if (payload.date && payload.situation) {
         console.log(`📅 SERVER: Attempting to update calendar ${payload.date} -> ${payload.situation}`);
         
-        // Test Supabase connection first
-        console.log(`📅 SERVER: Testing Supabase connection...`);
-        const { data: testData, error: testError } = await supabase
-          .from('calendar_assignments')
-          .select('count')
-          .limit(1);
-        
-        if (testError) {
-          console.error('❌ Supabase connection test failed:', testError);
-          throw new Error(`Supabase connection failed: ${testError.message}`);
-        }
-        
-        console.log(`📅 SERVER: Supabase connection OK, proceeding with update...`);
-        
         const { data, error } = await supabase
           .from('calendar_assignments')
           .upsert({
