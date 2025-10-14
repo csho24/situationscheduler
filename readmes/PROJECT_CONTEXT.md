@@ -217,33 +217,56 @@ Note on interval mode storage:
 - If the UI does not expose Root Directory, re-link the repo and pick `plug-scheduler` at import time
 - Optional safeguard: add a root-level `vercel.json` in the repo (outside this folder) to pin `plug-scheduler` as the build root
 
-### Backup Process (CRITICAL)
+### Backup Process (CRITICAL - Updated Oct 14, 2025)
 **Regular Supabase backups are essential** - database exists only in cloud, not in git.
 
-**Methods to create backups**:
+**⚠️ CRITICAL WARNINGS:**
+1. **VERIFY PROJECT URL** - Must use correct Supabase project URL: `yrlvnshydrmhsvfqesnv.supabase.co` (NOT old URLs)
+2. **DNS ERRORS ARE COMMON** - pg_dump often fails with "could not translate host name" - this is a network/DNS issue, not a mistake
+3. **Use Node.js method** - Most reliable, bypasses DNS issues
 
-1. **Manual Backup Using pg_dump** (Recommended):
+**RECOMMENDED METHOD (Node.js Script):**
+
+```bash
+cd plug-scheduler
+node backup-supabase.js
+```
+
+This creates `supabase-backup-YYYY-MM-DDTHH-MM-SS.sql` in the plug-scheduler directory and shows:
+- Record counts for each table
+- Schedules in blackout windows (times ending in :01-:10 or :31-:40)
+
+**Script location**: `plug-scheduler/backup-supabase.js` (already exists in repo)
+
+**What it backs up:**
+- Calendar assignments (calendar_assignments)
+- Device schedules (device_schedules) 
+- User settings (user_settings)
+- Interval mode state (interval_mode)
+
+**Alternative Methods (if Node.js fails):**
+
+1. **Supabase Dashboard** (simplest, no command line):
+   - Settings → Database → Backups → "Create manual backup"
+   - Downloads automatically
+
+2. **pg_dump** (often fails with DNS errors):
    ```bash
-   # Install PostgreSQL if needed: brew install postgresql
-   pg_dump 'postgresql://postgres:[PASSWORD]@db.[PROJECT].supabase.co:5432/postgres' > backup.sql
+   # Usually FAILS with "could not translate host name" error
+   pg_dump 'postgresql://postgres:[PASSWORD]@db.yrlvnshydrmhsvfqesnv.supabase.co:5432/postgres' > backup.sql
    ```
 
-2. **Supabase CLI Backup**:
-   ```bash
-   supabase db dump --db-url 'postgresql://postgres:[PASSWORD]@db.[PROJECT].supabase.co:5432/postgres' -f backup.sql
-   ```
+3. **Manual CSV Export** (tedious but works):
+   - Table Editor → Select table → ... menu → Download as CSV
+   - Repeat for each table: calendar_assignments, device_schedules, user_settings, interval_mode
 
-3. **Supabase Dashboard**: Settings > Database > Backups > Create manual backup
-
-4. **Export via Supabase Client** (Node.js):
-   ```javascript
-   // Use existing supabase client to export table-by-table
-   const { data } = await supabase.from('table_name').select('*');
-   // Convert to SQL INSERT statements
-   ```
-
-**Current backup**: `supabase-backup-2025-09-28-13-00.sql`
+**Current backup**: `supabase-backup-2025-10-14T15-42-11.sql` (29 calendar, 44 devices, 3 settings, 1 interval)
 **Backup frequency**: Before any major changes or deployments
+
+**Common Issues:**
+- **"could not translate host name"** = DNS/network issue, try Node.js method instead
+- **0 records returned** = Wrong project URL or API key
+- **Permission denied** = Using anon key instead of service role key (anon key works for this project)
 
 ### Development Notes
 - Vercel project root directory should be set to `plug-scheduler` (not repo root)

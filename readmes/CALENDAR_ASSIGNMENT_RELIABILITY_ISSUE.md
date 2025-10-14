@@ -357,6 +357,29 @@ try {
   - Does second save (rest→work) work?
   - Does order matter (new vs. existing assignment)?
 
+### Actual Results (October 14, 2025 - 11:18pm to 11:26pm)
+
+**First Test (~11:18pm):**
+- Device: Android Chrome phone
+- Action: Changed Oct 15 rest → work → rest (multiple changes)
+- Supabase result: ✅ Database updated correctly to "rest" (timestamp: 15:18:32 UTC = 23:18 SG)
+- Vercel logs: ❌ NO logs appeared for phone requests
+- Conclusion: Save worked but no logging
+
+**Second Test (11:26pm):**
+- Device: Android Chrome phone
+- Action: Changed Oct 15 rest → work
+- Supabase result: ✅ Database updated correctly to "work"
+- Vercel logs: ✅ Logs appeared for phone request
+- Conclusion: Save worked AND logged
+
+**Analysis:**
+- Same phone, same code, 8 minutes apart
+- First attempt: worked but didn't log
+- Second attempt: worked and logged
+- **INTERMITTENT BEHAVIOR CONFIRMED** - can't predict when it will work vs. not work
+- Pattern matches Oct 13-14 incident (works sometimes, fails sometimes)
+
 ### What to Monitor
 
 1. **Immediate feedback** - Check Supabase calendar_assignments table after each change
@@ -372,10 +395,51 @@ try {
 
 ---
 
-## STATUS: EXPERIMENT MODE
+## STATUS: INTERMITTENT BUG CONFIRMED, FIXES READY TO DEPLOY
 
-**Current plan**: 
-- Test on Oct 15-16 to gather data on save reliability
-- Fixes are ready (not deployed) but holding to understand root cause first
-- Critical: User has schedules they can't afford to lose, changes must be safe
+**Current situation**: 
+- Bug confirmed as intermittent (same code, different results)
+- Tonight's tests: First attempt worked but didn't log, second attempt worked and logged
+- Matches Oct 13-14 pattern (consistent failure, then suddenly works)
+- No clear pattern or root cause identified
+
+**Fixes ready to deploy:**
+1. ✅ Remove connection test (eliminate failure point)
+2. ✅ Add retry logic (3 attempts, 10 sec timeout each)
+3. ✅ UI rollback on failure (calendar reverts color)
+4. ✅ Alert message on failure (see below)
+
+### What User Will See After Deployment
+
+**Success (normal case):**
+- Click calendar day
+- Color changes immediately
+- No message/alert
+- Change persists
+
+**Failure (if all 3 retries fail):**
+- Click calendar day
+- Color changes briefly, then **reverts back to original**
+- **Alert popup appears**: "Failed to save calendar assignment. Please check your internet connection and try again."
+- Must click OK to dismiss
+- Calendar stays at original color (e.g., stays yellow if was yellow)
+
+**The alert message is:**
+```
+"Failed to save calendar assignment. Please check your internet connection and try again."
+```
+
+### Trade-offs
+
+**Pros:**
+- Won't fail silently (you'll know if it didn't save)
+- Retry logic might catch transient failures
+- No wrong schedules from thinking it saved when it didn't
+
+**Cons:**
+- Alert popup is annoying (you said you don't want "it fails" messages)
+- Doesn't fix root cause (still intermittent)
+- Might get false alarms if timeout too short
+
+**Ready to deploy?**
 
