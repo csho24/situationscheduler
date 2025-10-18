@@ -261,11 +261,14 @@ export class ServerScheduler {
   }
 
   // Get status information (same logic as before but using server data)
-  getTodayScheduleInfo(): { situation: SituationType | null; nextAction: string | null } {
+  getTodayScheduleInfo(defaultDay?: string): { situation: SituationType | null; nextAction: string | null } {
     const today = new Date().toISOString().split('T')[0];
     const todaySchedule = this.getSituation(today);
     
-    if (!todaySchedule) {
+    // Use calendar assignment if exists, otherwise fall back to default day
+    const effectiveSituation = todaySchedule?.situation || defaultDay;
+    
+    if (!effectiveSituation) {
       return { situation: null, nextAction: null };
     }
     
@@ -291,13 +294,13 @@ export class ServerScheduler {
     // Check TODAY's remaining events
     for (const device of DEVICES) {
       const deviceSchedules = this.customSchedules[device.id];
-      if (!deviceSchedules || !deviceSchedules[todaySchedule.situation]) continue;
+      if (!deviceSchedules || !deviceSchedules[effectiveSituation]) continue;
       
-      const schedule = deviceSchedules[todaySchedule.situation];
+      const schedule = deviceSchedules[effectiveSituation];
       
       // Safety check: ensure schedule is iterable
       if (!schedule || !Array.isArray(schedule)) {
-        console.warn(`Schedule for ${device.name} ${todaySchedule.situation} is not an array:`, schedule);
+        console.warn(`Schedule for ${device.name} ${effectiveSituation} is not an array:`, schedule);
         continue;
       }
       
@@ -349,7 +352,7 @@ export class ServerScheduler {
     }
     
     if (upcomingEvents.length === 0) {
-      return { situation: todaySchedule.situation, nextAction: null };
+      return { situation: effectiveSituation, nextAction: null };
     }
     
     // Sort by day then time
@@ -382,7 +385,7 @@ export class ServerScheduler {
       nextAction = `${actionParts.join(', ')} at ${eventsAtEarliestTime[0].time}${dayPrefix}`;
     }
     
-    return { situation: todaySchedule.situation, nextAction };
+    return { situation: effectiveSituation, nextAction };
   }
 
   // No more client-side interval - server handles all scheduling

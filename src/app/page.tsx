@@ -634,7 +634,7 @@ export default function Home() {
             
             // Also update the server scheduler (no sync - just load data)
             serverScheduler.updateCustomSchedules(data.deviceSchedules, false);
-            setTodayInfo(serverScheduler.getTodayScheduleInfo());
+            setTodayInfo(serverScheduler.getTodayScheduleInfo(data.userSettings?.default_day));
           } else {
             console.log(`❌ UI: No device schedules in API response`);
           }
@@ -665,9 +665,9 @@ export default function Home() {
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
       serverScheduler.updateCustomSchedules(customSchedules, false);
-      setTodayInfo(serverScheduler.getTodayScheduleInfo());
+      setTodayInfo(serverScheduler.getTodayScheduleInfo(userSettings?.default_day));
     }
-  }, [customSchedules]);
+  }, [customSchedules, userSettings?.default_day]);
 
   // Update current time every minute for live schedule highlighting
   React.useEffect(() => {
@@ -910,7 +910,7 @@ export default function Home() {
     const today = new Date();
     const dateString = today.toISOString().split('T')[0];
     await serverScheduler.setSituation(dateString, situation);
-    setTodayInfo(serverScheduler.getTodayScheduleInfo());
+    setTodayInfo(serverScheduler.getTodayScheduleInfo(userSettings?.default_day));
     setNotification(`Today scheduled as ${situation} day - server scheduling active!`);
     setTimeout(() => setNotification(null), 3000);
   };
@@ -931,7 +931,7 @@ export default function Home() {
     // Force sync to server to ensure data is persisted
     // No sync - read-only from Supabase
     
-    setTodayInfo(serverScheduler.getTodayScheduleInfo());
+    setTodayInfo(serverScheduler.getTodayScheduleInfo(userSettings?.default_day));
     
     setEditingSituation(null);
     setNotification(`${selectedDevice.name} ${situation} schedule updated and synced to server!`);
@@ -1282,7 +1282,7 @@ export default function Home() {
                     // Check if work schedule is active today (regardless of device)
                     const today = new Date().toISOString().split('T')[0];
                     const todaySchedule = serverScheduler.getSituation(today);
-                    const isActiveToday = todaySchedule?.situation === 'work';
+                    const isActiveToday = todaySchedule?.situation === 'work' || (!todaySchedule && userSettings?.default_day === 'work');
                     
                     // Find the most recent schedule entry that should be active (including overnight)
                     let activeIndex = -1;
@@ -1359,7 +1359,7 @@ export default function Home() {
                     // Check if rest schedule is active today (regardless of device)
                     const today = new Date().toISOString().split('T')[0];
                     const todaySchedule = serverScheduler.getSituation(today);
-                    const isActiveToday = todaySchedule?.situation === 'rest';
+                    const isActiveToday = todaySchedule?.situation === 'rest' || (!todaySchedule && userSettings?.default_day === 'rest');
                     
                     // Find the most recent schedule entry that should be active (including overnight)
                     let activeIndex = -1;
