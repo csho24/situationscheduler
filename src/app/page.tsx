@@ -739,15 +739,13 @@ export default function Home() {
     updateHeartbeat();
     const heartbeatInterval = setInterval(updateHeartbeat, 10000);
     
-    // Check for other windows after 12 seconds, then every 15 seconds
+    // Check for other windows ONCE after 12 seconds (allows cleanup to finish first)
     setTimeout(checkOtherWindows, 12000);
-    const checkInterval = setInterval(checkOtherWindows, 15000);
     
     // Cleanup on unmount
     return () => {
       channel.close();
       clearInterval(heartbeatInterval);
-      clearInterval(checkInterval);
       
       // Clear heartbeat marker
       fetch('/api/schedules', {
