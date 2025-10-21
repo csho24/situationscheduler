@@ -300,6 +300,21 @@ This creates `supabase-backup-YYYY-MM-DDTHH-MM-SS.sql` in the plug-scheduler dir
 - Implement execution logging for debugging
 - Create monitoring dashboard for cron health
 
+### Multiple Window Detection (October 21, 2025)
+
+**Problem**: Multiple browser windows/tabs running simultaneously causes conflicts with Web Workers and device commands, leading to erratic interval mode behavior.
+
+**Solution**: Dual detection system
+- **BroadcastChannel**: Instant detection for same browser/origin - Alert: "Another window/tab is already open in the same browser!"
+- **Supabase Heartbeat**: 12-second detection for cross-browser/cross-origin - Alert: "Another window/tab is already open in a different browser or across localhost/deployed!"
+
+**Why It Matters**:
+- Multiple Web Workers send conflicting commands to devices
+- Causes AC interval mode to malfunction (timers run but AC doesn't respond)
+- User should only have ONE window/tab open at a time
+
+**See**: `AC_INTERVAL_MODE_DEVELOPMENT_README.md` for full implementation details
+
 ### Documentation Structure
 
 **Project Readmes** (in `/readmes/` directory):

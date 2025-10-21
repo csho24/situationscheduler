@@ -634,7 +634,7 @@ export default function Home() {
         channel.postMessage({ type: 'PONG' });
       } else if (e.data.type === 'PONG') {
         // Another window replied - show alert
-        alert('⚠️ WARNING: Another window/tab is already open!\n\nClose it to avoid conflicts (especially with interval mode).');
+        alert('⚠️ WARNING: Another window/tab is already open in the same browser!\n\nClose it to avoid conflicts with interval mode and device control.');
       }
     };
     
@@ -727,7 +727,7 @@ export default function Home() {
           console.log('🔍 AFTER cleanup - Other active windows found:', otherWindows.length);
           
           if (otherWindows.length > 0) {
-            alert('⚠️ WARNING: Another window/tab is open (different browser or localhost/deployed)!\n\nClose it to avoid conflicts.');
+            alert('⚠️ WARNING: Another window/tab is already open in a different browser or across localhost/deployed!\n\nClose it to avoid conflicts with interval mode and device control.');
           }
         }
       } catch (error) {

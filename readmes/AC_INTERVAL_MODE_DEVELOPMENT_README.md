@@ -1598,3 +1598,50 @@ return NextResponse.json({ success: true, ... });
 3. Monitor for missing cron logs, not just error logs
 
 ---
+
+## MULTIPLE WINDOW DETECTION SYSTEM (October 21, 2025)
+
+### The Problem
+**Issue**: User had 2 browser windows open (Chrome and Chromium) simultaneously, both running the app and their respective Web Workers. These workers were sending conflicting commands to the AC, causing erratic behavior.
+
+**Symptoms**:
+- AC interval mode showing ON but not physically responding
+- Timers running but AC not turning ON/OFF as expected
+- User was "steaming" because AC wasn't working despite interval mode being active
+
+### The Solution: Dual Detection System
+
+**Method 1: BroadcastChannel - Same Browser, Same Origin**
+- Detects windows instantly in same browser
+- Alert: `"⚠️ WARNING: Another window/tab is already open in the same browser!"`
+- Works for: localhost → localhost, deployed → deployed
+- Doesn't work for: localhost → deployed, Chrome → Chromium
+
+**Method 2: Supabase Heartbeat - Cross-Browser, Cross-Origin**
+- Detects windows after 12 seconds via database heartbeats
+- Alert: `"⚠️ WARNING: Another window/tab is already open in a different browser or across localhost/deployed!"`
+- Works for: All cases (cross-browser, localhost → deployed)
+- Uses `user_settings` table with `window_active_${sessionId}` keys
+
+### How It Works
+
+**Window Lifecycle**:
+1. Window opens → generates unique `sessionId`
+2. BroadcastChannel asks "anyone here?" → instant detection
+3. Heartbeat saves to database every 10 seconds
+4. Check runs once after 12 seconds for cross-browser detection
+5. Auto-cleanup removes stale sessions (>30s old)
+6. Window closes → sets heartbeat to '0' for cleanup
+
+**Why This Prevents Interval Mode Issues**:
+- Multiple Web Workers = multiple timer loops = conflicting AC commands
+- Alert warns user to close extra windows before starting interval mode
+- Prevents the exact issue that caused user frustration on Oct 21, 2025
+
+### Files Modified
+- `/src/app/page.tsx`: Added BroadcastChannel + Supabase heartbeat detection
+- Both alerts mention "interval mode and device control" conflicts
+
+**Status**: ✅ **IMPLEMENTED** - Prevents multi-window conflicts that cause erratic interval mode behavior
+
+---
