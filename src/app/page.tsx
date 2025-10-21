@@ -294,6 +294,9 @@ export default function Home() {
   const [showCreateRoutineModal, setShowCreateRoutineModal] = useState(false);
   const [newRoutineName, setNewRoutineName] = useState('');
   
+  // Session tracking to detect multiple windows
+  const [sessionId] = useState(() => `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+  
   // Interval mode state for aircon (shared across pages)
   const [intervalMode, setIntervalMode] = useState(false);
   const [intervalCountdown, setIntervalCountdown] = useState(0);
@@ -615,9 +618,79 @@ export default function Home() {
 
   // Load interval mode state on mount
   React.useEffect(() => {
-    
     loadIntervalModeState();
   }, []);
+
+  // Detect multiple windows on mount
+  React.useEffect(() => {
+    const checkMultipleWindows = async () => {
+      try {
+        // Save this session's heartbeat
+        await fetch('/api/schedules', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'user_settings',
+            settingKey: `window_session_${sessionId}`,
+            settingValue: Date.now().toString()
+          })
+        });
+
+        // Check for other recent sessions
+        const response = await fetch('/api/schedules');
+        const data = await response.json();
+        
+        if (data.success && data.userSettings) {
+          const otherSessions = Object.entries(data.userSettings)
+            .filter(([key, value]) => 
+              key.startsWith('window_session_') && 
+              key !== `window_session_${sessionId}` &&
+              (Date.now() - parseInt(value as string)) < 120000 // Less than 2 min old
+            );
+          
+          if (otherSessions.length > 0) {
+            alert('⚠️ WARNING: Another browser window/tab is open!\n\nThis will cause interval mode conflicts.\n\nClose the other window to avoid issues.');
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check for multiple windows:', error);
+      }
+    };
+
+    checkMultipleWindows();
+
+    // Update session heartbeat every 30 seconds
+    const sessionInterval = setInterval(async () => {
+      try {
+        await fetch('/api/schedules', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'user_settings',
+            settingKey: `window_session_${sessionId}`,
+            settingValue: Date.now().toString()
+          })
+        });
+      } catch (error) {
+        console.error('Failed to update session heartbeat:', error);
+      }
+    }, 30000);
+
+    // Cleanup on unmount
+    return () => {
+      clearInterval(sessionInterval);
+      // Clear session marker
+      fetch('/api/schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'user_settings',
+          settingKey: `window_session_${sessionId}`,
+          settingValue: '0' // Mark as closed
+        })
+      }).catch(() => {});
+    };
+  }, [sessionId]);
 
   // Load data directly from API on mount - bypass server scheduler
   React.useEffect(() => {
