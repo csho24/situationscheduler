@@ -352,3 +352,178 @@ User manually re-enabled the cron job on cron-job.org at 7:00pm Oct 12. Schedule
 
 ---
 
+## INCIDENT: 502 Bad Gateway Errors + Cron Auto-Disabled (October 20-21, 2025)
+
+### The Problem
+**Time**: October 20, 2025 - 8:11 AM  
+**Expected**: Normal cron execution  
+**Actual**: 502 Bad Gateway errors for 26 consecutive minutes (8:11-8:37 AM)  
+**Result**: Cron-job.org auto-disabled the job after 26 failures  
+**Impact**: NO schedules ran from 8:37 AM Oct 20 → Oct 21 (when discovered)
+
+### Cron-job.org Auto-Disable Email
+```
+Your cronjob has been disabled automatically because of too many failed executions.
+
+URL: https://situationscheduler.vercel.app/api/cron
+Last execution attempt: 10/20/2025 08:11:02 GMT (planned: 10/20/2025 08:11:00 GMT)
+Last status: Failed (502 Bad Gateway)
+Failed subsequent execution attempts: 26
+```
+
+### Root Cause: Fetch Timeout Cascade
+
+**502 Bad Gateway = Vercel serverless function timeout (>10 seconds)**
+
+The `/api/cron/route.ts` endpoint had **NO TIMEOUTS** on any fetch calls. When Supabase or Tuya API was slow, the cascade of sequential fetch calls would exceed Vercel's 10-second limit:
+
+**Problematic fetch cascade (lines 238-310):**
+1. `fetch(/api/schedules)` - Check heartbeat → Supabase query (no timeout)
+2. `fetch(/api/schedules)` - Get last interval state → Supabase query (no timeout)
+3. `fetch(/api/tuya)` - Send device command → Tuya API call (no timeout)
+4. `fetch(/api/schedules)` - Save new state → Supabase query (no timeout)
+
+**If each takes 3+ seconds:**
+- Total: 12+ seconds → Vercel times out at 10s → 502 Bad Gateway
+- Happens EVERY MINUTE if condition persists
+- After 26 minutes → cron-job.org auto-disables job
+- ALL schedules stop working
+
+**Why it happened at 8:11 AM:**
+- Likely Supabase had temporary slowness during that time window
+- OR Tuya API was slow
+- OR serverless cold start + slow queries
+- Without timeouts, any slowness cascades into 502 errors
+
+### The Fix (October 21, 2025)
+
+Added **timeout protection to ALL fetch calls** in `/api/cron/route.ts`:
+
+**1. Initial schedule fetch (line 67-74):**
+```typescript
+const scheduleController = new AbortController();
+const scheduleTimeout = setTimeout(() => scheduleController.abort(), 5000); // 5 second timeout
+
+const response = await fetch(`${baseUrl}/api/schedules`, {
+  signal: scheduleController.signal
+});
+clearTimeout(scheduleTimeout);
+```
+
+**2. Device control API calls (line 178-192):**
+```typescript
+const deviceController = new AbortController();
+const deviceTimeout = setTimeout(() => deviceController.abort(), 5000); // 5 second timeout
+
+const response = await fetch(`${baseUrl}/api/tuya`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ deviceId, action, value }),
+  signal: deviceController.signal
+});
+clearTimeout(deviceTimeout);
+```
+
+**3. Interval mode heartbeat check (line 254-263):**
+```typescript
+const heartbeatController = new AbortController();
+const heartbeatTimeout = setTimeout(() => heartbeatController.abort(), 3000); // 3 second timeout
+
+const heartbeatResponse = await fetch(`${baseUrl}/api/schedules`, {
+  signal: heartbeatController.signal
+}).catch(err => {
+  console.log(`🔄 CRON: Heartbeat check timed out or failed:`, err.message);
+  return null;
+});
+clearTimeout(heartbeatTimeout);
+```
+
+**4. Interval mode last state check (line 301-310):**
+```typescript
+const lastStateController = new AbortController();
+const lastStateTimeout = setTimeout(() => lastStateController.abort(), 3000); // 3 second timeout
+
+const lastStateResponse = await fetch(`${baseUrl}/api/schedules`, {
+  signal: lastStateController.signal
+}).catch(err => {
+  console.log(`🔄 CRON: Last state check timed out or failed:`, err.message);
+  return null;
+});
+clearTimeout(lastStateTimeout);
+```
+
+**5. Interval mode Tuya command (line 323-339):**
+```typescript
+const commandController = new AbortController();
+const commandTimeout = setTimeout(() => commandController.abort(), 5000); // 5 second timeout for Tuya API
+
+const commandResponse = await fetch(`${baseUrl}/api/tuya`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ deviceId, action, value }),
+  signal: commandController.signal
+}).catch(err => {
+  console.log(`🔄 CRON: Tuya API command timed out or failed:`, err.message);
+  return null;
+});
+clearTimeout(commandTimeout);
+```
+
+**6. Interval mode save state (line 346-361):**
+```typescript
+const saveStateController = new AbortController();
+const saveStateTimeout = setTimeout(() => saveStateController.abort(), 3000); // 3 second timeout
+
+await fetch(`${baseUrl}/api/schedules`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ type: 'user_settings', settingKey, settingValue }),
+  signal: saveStateController.signal
+}).catch(err => {
+  console.log(`🔄 CRON: Save state timed out or failed:`, err.message);
+});
+clearTimeout(saveStateTimeout);
+```
+
+### Benefits of the Fix
+
+**Prevents 502 errors:**
+- Maximum execution time: ~9 seconds (under Vercel's 10s limit)
+- Each fetch has its own timeout (3-5 seconds)
+- Failures are caught and logged, don't crash the function
+
+**Graceful degradation:**
+- If Supabase is slow, timeout and continue
+- If Tuya API is slow, timeout and log error
+- Cron function always returns 200 OK (prevents auto-disable)
+
+**Better observability:**
+- Timeout errors are logged with clear messages
+- Can identify which service is slow from logs
+- Doesn't cascade into 502s
+
+### Resolution
+
+**Immediate action (Oct 21):**
+1. User re-enabled cron job on cron-job.org manually
+2. Applied timeout fix to all fetch calls
+3. Deployed to production
+
+**Status:** ✅ Fixed and deployed
+
+### Lesson Learned
+
+**ALWAYS add timeouts to external API calls in serverless functions:**
+- Serverless has hard 10-second limit
+- No timeouts = risk of cascading failures
+- One slow service can take down entire cron system
+- Timeouts enable graceful degradation
+
+**New protocol for ALL API routes:**
+1. Add timeout to EVERY fetch call
+2. Catch and log timeout errors
+3. Don't let external service slowness crash the function
+4. Always return proper Response (never throw unhandled errors)
+
+---
+

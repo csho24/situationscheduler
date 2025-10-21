@@ -62,7 +62,16 @@ export async function GET() {
     
     // Use the SAME approach as /api/schedules endpoint
     const baseUrl = process.env.NODE_ENV === 'production' ? `https://situationscheduler.vercel.app` : 'http://localhost:3001';
-    const response = await fetch(`${baseUrl}/api/schedules`);
+    
+    // Add timeout to prevent 502 errors from slow Supabase queries
+    const scheduleController = new AbortController();
+    const scheduleTimeout = setTimeout(() => scheduleController.abort(), 5000); // 5 second timeout
+    
+    const response = await fetch(`${baseUrl}/api/schedules`, {
+      signal: scheduleController.signal
+    });
+    clearTimeout(scheduleTimeout);
+    
     const data = await response.json();
     
     if (!data.success) {
@@ -166,6 +175,10 @@ export async function GET() {
             // Use correct action for aircon device
             const action = deviceId === 'a3cf493448182afaa9rlgw' ? 'ir_power' : 'switch_1';
             
+            // Add timeout to prevent 502 errors from slow Tuya API
+            const deviceController = new AbortController();
+            const deviceTimeout = setTimeout(() => deviceController.abort(), 5000); // 5 second timeout
+            
             const response = await fetch(`${baseUrl}/api/tuya`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -173,8 +186,10 @@ export async function GET() {
                 deviceId,
                 action,
                 value: schedule.action === 'on'
-              })
+              }),
+              signal: deviceController.signal
             });
+            clearTimeout(deviceTimeout);
             
             if (!response.ok) {
               throw new Error(`HTTP error! status: ${response.status}`);
@@ -235,8 +250,19 @@ export async function GET() {
         const baseUrl = process.env.NODE_ENV === 'production' ? 'https://situationscheduler.vercel.app' : 'http://localhost:3001';
         
         // Check if Web Worker is active (heartbeat < 2 min old)
-        const heartbeatResponse = await fetch(`${baseUrl}/api/schedules`);
-        const heartbeatData = await heartbeatResponse.json();
+        // Add timeout to prevent 502 errors from slow Supabase queries
+        const heartbeatController = new AbortController();
+        const heartbeatTimeout = setTimeout(() => heartbeatController.abort(), 3000); // 3 second timeout
+        
+        const heartbeatResponse = await fetch(`${baseUrl}/api/schedules`, {
+          signal: heartbeatController.signal
+        }).catch(err => {
+          console.log(`🔄 CRON: Heartbeat check timed out or failed:`, err.message);
+          return null;
+        });
+        clearTimeout(heartbeatTimeout);
+        
+        const heartbeatData = heartbeatResponse ? await heartbeatResponse.json().catch(() => ({})) : {};
         const heartbeatTimestamp = heartbeatData?.userSettings?.interval_mode_heartbeat;
         
         // Check if Web Worker is active - if so, skip interval mode control
@@ -272,8 +298,18 @@ export async function GET() {
         
         // Check if we need to send command (only send when transitioning)
         // Track last state in user_settings to avoid sending same command repeatedly
-        const lastStateResponse = await fetch(`${baseUrl}/api/schedules`);
-        const lastStateData = await lastStateResponse.json();
+        const lastStateController = new AbortController();
+        const lastStateTimeout = setTimeout(() => lastStateController.abort(), 3000); // 3 second timeout
+        
+        const lastStateResponse = await fetch(`${baseUrl}/api/schedules`, {
+          signal: lastStateController.signal
+        }).catch(err => {
+          console.log(`🔄 CRON: Last state check timed out or failed:`, err.message);
+          return null;
+        });
+        clearTimeout(lastStateTimeout);
+        
+        const lastStateData = lastStateResponse ? await lastStateResponse.json().catch(() => ({})) : {};
         const lastIntervalState = lastStateData?.userSettings?.interval_mode_last_state;
         
         // If no saved state, always send command (first run)
@@ -284,6 +320,9 @@ export async function GET() {
           const lastState = lastIntervalState === 'true';
           console.log(`🔄 CRON: State changed (${lastIntervalState ? (lastState ? 'ON' : 'OFF') : 'UNKNOWN'} → ${shouldBeOn ? 'ON' : 'OFF'}), sending command`);
           
+          const commandController = new AbortController();
+          const commandTimeout = setTimeout(() => commandController.abort(), 5000); // 5 second timeout for Tuya API
+          
           const commandResponse = await fetch(`${baseUrl}/api/tuya`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -291,14 +330,22 @@ export async function GET() {
               deviceId: 'a3cf493448182afaa9rlgw',
               action: 'ir_power',
               value: shouldBeOn
-            })
+            }),
+            signal: commandController.signal
+          }).catch(err => {
+            console.log(`🔄 CRON: Tuya API command timed out or failed:`, err.message);
+            return null;
           });
+          clearTimeout(commandTimeout);
           
-          if (commandResponse.ok) {
+          if (commandResponse && commandResponse.ok) {
             const commandResult = await commandResponse.json();
             console.log(`🔄 CRON: Interval mode command result:`, commandResult);
             
             // Save new state to prevent duplicate commands
+            const saveStateController = new AbortController();
+            const saveStateTimeout = setTimeout(() => saveStateController.abort(), 3000); // 3 second timeout
+            
             await fetch(`${baseUrl}/api/schedules`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -306,8 +353,12 @@ export async function GET() {
                 type: 'user_settings',
                 settingKey: 'interval_mode_last_state',  // camelCase, not snake_case!
                 settingValue: shouldBeOn.toString()
-              })
+              }),
+              signal: saveStateController.signal
+            }).catch(err => {
+              console.log(`🔄 CRON: Save state timed out or failed:`, err.message);
             });
+            clearTimeout(saveStateTimeout);
             
             executedActions.push({
               deviceId: 'a3cf493448182afaa9rlgw',
