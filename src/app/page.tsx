@@ -297,6 +297,7 @@ export default function Home() {
   // Interval mode state for aircon (shared across pages)
   const [intervalMode, setIntervalMode] = useState(false);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
+  const [sessionId] = useState(() => `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
   const [intervalCountdown, setIntervalCountdown] = useState(0);
   const [offCountdown, setOffCountdown] = useState(0);
   const [isOnPeriod, setIsOnPeriod] = useState(true);
@@ -619,36 +620,147 @@ export default function Home() {
     loadIntervalModeState();
   }, []);
 
-  // Multiple window detection using BroadcastChannel
+  // Multiple window detection - DUAL approach (detects ANY window open, not just interval mode)
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
     
-    // Create broadcast channel for cross-tab communication
-    const channel = new BroadcastChannel('interval_mode_detection');
+    // METHOD 1: BroadcastChannel (instant, same-browser same-origin only)
+    const channel = new BroadcastChannel('app_window_detection');
     broadcastChannelRef.current = channel;
     
-    // Listen for messages from other tabs
     channel.onmessage = (e) => {
       if (e.data.type === 'PING') {
-        // Another tab is checking if interval mode is running
-        if (intervalMode) {
-          // Reply that we're running interval mode
-          channel.postMessage({ type: 'PONG' });
-        }
+        // Another window is asking if anyone is here - reply yes
+        channel.postMessage({ type: 'PONG' });
       } else if (e.data.type === 'PONG') {
-        // Another tab confirmed it's running interval mode
-        alert('⚠️ WARNING: Interval mode is already running in another browser window/tab!\n\nClose the other window to avoid conflicts.');
+        // Another window replied - show alert
+        alert('⚠️ WARNING: Another window/tab is already open!\n\nClose it to avoid conflicts (especially with interval mode).');
       }
     };
     
-    // On mount, check if any other tab is running interval mode
+    // Ask if anyone is here
     channel.postMessage({ type: 'PING' });
+    
+    // METHOD 2: Supabase heartbeat (catches cross-browser and cross-origin)
+    const updateHeartbeat = async () => {
+      try {
+        console.log('💓 Sending heartbeat for session:', sessionId.substring(0, 20) + '...');
+        await fetch('/api/schedules', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'user_settings',
+            settingKey: `window_active_${sessionId}`,
+            settingValue: Date.now().toString()
+          })
+        });
+      } catch (error) {
+        console.error('Failed to update heartbeat:', error);
+      }
+    };
+    
+    const checkOtherWindows = async () => {
+      try {
+        const response = await fetch('/api/schedules');
+        const data = await response.json();
+        
+        if (data.success && data.userSettings) {
+          const now = Date.now();
+          const STALE_THRESHOLD = 30000; // 30 seconds - if no update in this time, it's dead
+          
+          // Debug: show all heartbeats BEFORE cleanup
+          const allHeartbeatsBefore = Object.entries(data.userSettings)
+            .filter(([key]) => key.startsWith('window_active_'))
+            .map(([key, value]) => ({
+              key: key.substring(0, 40) + '...',
+              age: Math.floor((now - parseInt(value as string)) / 1000),
+              isCurrent: key === `window_active_${sessionId}`,
+              isStale: (now - parseInt(value as string)) > STALE_THRESHOLD
+            }));
+          
+          console.log('🔍 BEFORE cleanup - Total sessions:', allHeartbeatsBefore.length);
+          console.table(allHeartbeatsBefore);
+          
+          // Clean up stale sessions (older than 30s) - WAIT for completion
+          const staleKeys: string[] = [];
+          Object.entries(data.userSettings).forEach(([key, value]) => {
+            if (key.startsWith('window_active_') && 
+                key !== `window_active_${sessionId}` &&
+                (now - parseInt(value as string)) > STALE_THRESHOLD) {
+              staleKeys.push(key);
+            }
+          });
+          
+          // Remove stale entries - WAIT for all to complete
+          if (staleKeys.length > 0) {
+            console.log('🧹 Cleaning up', staleKeys.length, 'stale sessions...');
+            await Promise.all(staleKeys.map(key => 
+              fetch('/api/schedules', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: 'user_settings',
+                  settingKey: key,
+                  settingValue: '0'
+                })
+              }).catch(() => {})
+            ));
+            console.log('✅ Cleanup complete');
+            
+            // Wait a bit for DB to update, then re-fetch
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+          
+          // RE-FETCH after cleanup to get fresh data
+          const response2 = await fetch('/api/schedules');
+          const data2 = await response2.json();
+          
+          // Check for active windows (updated within last 15s)
+          const otherWindows = Object.entries(data2.userSettings || {})
+            .filter(([key, value]) => 
+              key.startsWith('window_active_') && 
+              key !== `window_active_${sessionId}` &&
+              parseInt(value as string) > 0 && // Not marked as closed
+              (now - parseInt(value as string)) < 15000 // Active within last 15s
+            );
+          
+          console.log('🔍 AFTER cleanup - Other active windows found:', otherWindows.length);
+          
+          if (otherWindows.length > 0) {
+            alert('⚠️ WARNING: Another window/tab is open (different browser or localhost/deployed)!\n\nClose it to avoid conflicts.');
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check other windows:', error);
+      }
+    };
+    
+    // Start heartbeat immediately and update every 10s
+    updateHeartbeat();
+    const heartbeatInterval = setInterval(updateHeartbeat, 10000);
+    
+    // Check for other windows after 12 seconds, then every 15 seconds
+    setTimeout(checkOtherWindows, 12000);
+    const checkInterval = setInterval(checkOtherWindows, 15000);
     
     // Cleanup on unmount
     return () => {
       channel.close();
+      clearInterval(heartbeatInterval);
+      clearInterval(checkInterval);
+      
+      // Clear heartbeat marker
+      fetch('/api/schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'user_settings',
+          settingKey: `window_active_${sessionId}`,
+          settingValue: '0'
+        })
+      }).catch(() => {});
     };
-  }, [intervalMode]);
+  }, [sessionId]);
 
   // Load data directly from API on mount - bypass server scheduler
   React.useEffect(() => {

@@ -2,6 +2,8 @@
 
 This document captures the current setup of the project.
 
+terminal shortcut: smartsch
+
 ### Purpose
 This app solves the problem of inconsistent work schedules where traditional fixed weekly routines don't work. With ad-hoc work and changing commitments, a Tuesday this week isn't the same as next Tuesday. 
 
